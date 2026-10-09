@@ -3,7 +3,7 @@
 /* ---------- config ---------- */
 // Paste your Google OAuth client ID here for a published app. When set, the "Google project settings" panel is hidden from users.
 // (A client ID is public by design. It is not a secret.) Leave empty while testing to enter it inside the app instead.
-const GOOGLE_CLIENT_ID = "";
+const GOOGLE_CLIENT_ID = "444123098530-7e8qu4po0ui0jiq5m5219g7es9ac2lsu.apps.googleusercontent.com";
 
 // true = the app only opens once installed (home screen / desktop app). In a normal browser tab it shows an install page instead.
 // It still opens in a tab on localhost so you can test. This is a front-end gate, not a security lock.
