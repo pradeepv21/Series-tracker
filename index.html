@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f7f2f8">
+<script>
+(function(){var d=document.documentElement,t=null,q=window.matchMedia?matchMedia("(prefers-color-scheme: dark)"):{matches:false};
+try{t=localStorage.getItem("seriesTracker.theme")}catch(e){}
+function mode(){return t||(q.matches?"dark":"light")}
+function apply(){d.dataset.mode=mode();var c=document.querySelector('meta[name="theme-color"]');if(c)c.content=d.dataset.mode==="dark"?"#120f1c":"#f7f2f8"}
+apply();
+window.__setTheme=function(x){t=x;try{localStorage.setItem("seriesTracker.theme",x)}catch(e){}apply()};
+if(q.addEventListener)q.addEventListener("change",function(){if(!t)apply()});})();
+</script>
+<title>Series Tracker</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gloock&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1 class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="brandg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--accent)"/><stop offset="1" style="stop-color:var(--accent-2)"/></linearGradient></defs><rect x="3" y="5" width="26" height="18" rx="5" fill="url(#brandg)"/><path d="M14 10.5v8l6.5-4z" fill="#fff"/><path d="M11 27.5h10" stroke="url(#brandg)" stroke-width="2.4" stroke-linecap="round"/></svg>
+      Series Tracker
+    </h1>
+    <div class="top-actions">
+      <button type="button" id="settingsBtn" class="sync-btn" aria-label="Open settings" title="Settings">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"/><path d="M19 13.2v-2.4l-2-.6a7 7 0 0 0-.7-1.7l.9-1.9-1.7-1.7-1.9.9a7 7 0 0 0-1.7-.7l-.6-2H9l-.6 2a7 7 0 0 0-1.7.7l-1.9-.9L3.1 6.6 4 8.5a7 7 0 0 0-.7 1.7l-2 .6v2.4l2 .6a7 7 0 0 0 .7 1.7l-.9 1.9 1.7 1.7 1.9-.9a7 7 0 0 0 1.7.7l.6 2h2.4l.6-2a7 7 0 0 0 1.7-.7l1.9.9 1.7-1.7-.9-1.9a7 7 0 0 0 .7-1.7l2-.6z"/></svg>
+        <span>Settings</span>
+      </button>
+    </div>
+  </header>
+
+  <div id="storageWarn" class="banner" role="alert" hidden>
+    <b>Changes can't be saved here.</b> Your browser is blocking this page from storing data, so your list would be lost when you close it. Open the file in Chrome or Safari, or host it online.
+  </div>
+
+  <main>
+    <section class="summary" aria-label="Library summary">
+      <div class="total"><span id="total">0</span><small id="totalLabel">shows</small></div>
+      <div>
+        <div class="bar" id="bar" role="img"></div>
+        <div class="legend"><span id="legend" style="display:contents"></span><span class="airing" id="airing"></span></div>
+      </div>
+    </section>
+
+    <div class="tabs" role="group" aria-label="Lists">
+      <button type="button" class="tab" data-tab="library" aria-pressed="true">My shows <span class="count" id="cntLib">0</span></button>
+      <button type="button" class="tab" data-tab="plan" aria-pressed="false">Plan to watch <span class="count" id="cntPlan">0</span></button>
+    </div>
+
+    <div class="add">
+      <input id="newName" type="text" aria-label="Show name" placeholder="Add a show" autocomplete="off">
+      <button type="button" class="primary" id="addBtn">Add show</button>
+    </div>
+
+    <div class="filters">
+      <div class="ctl ctl-search"><label for="search">Search</label>
+        <input id="search" type="search" placeholder="Search your library"></div>
+      <div class="ctl" id="ctlStatus" title="Where you are with the show: watching, completed, on hold, or dropped">
+        <label for="statusFilter">My watching status</label>
+        <select id="statusFilter"><option value="">All</option><option>Watching</option><option>Completed</option><option>On Hold</option><option>Dropped</option></select></div>
+      <div class="ctl" title="Whether the show itself is still ongoing, has ended, or was cancelled">
+        <label for="showFilter">Series status</label>
+        <select id="showFilter"><option value="">All</option><option>Ongoing</option><option>Ended</option><option>Cancelled</option></select></div>
+      <div class="ctl"><label for="langFilter">Language</label>
+        <select id="langFilter"><option value="">All</option></select></div>
+      <div class="ctl"><label for="sortBy">Sort by</label>
+        <select id="sortBy"><option value="new">Newest first</option><option value="title">Title A–Z</option><option value="status">My watching status</option></select></div>
+    </div>
+
+    <div class="list-meta"><div class="lm-left"><span id="count"></span><span id="enrich" aria-live="polite"></span></div><button type="button" id="clearFilters" class="ghost" hidden>Clear filters</button></div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th scope="col">Show</th><th scope="col">Language</th><th scope="col">Show status</th><th scope="col">My status</th>
+          <th scope="col" class="num">Seasons</th><th scope="col" class="num">Episodes</th><th scope="col"><span class="sr">Actions</span></th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <p class="note" id="note"></p>
+  </main>
+</div>
+
+<!-- Settings -->
+<section id="settingsPage" class="settings-page" hidden aria-labelledby="settingsTitle">
+  <div class="settings-inner">
+    <header class="settings-head">
+      <button type="button" id="settingsBack" class="ghost icon-btn" aria-label="Back to library"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <div><h2 id="settingsTitle">Settings</h2><p>Appearance, backup, import/export and show-data tools.</p></div>
+    </header>
+    <section class="settings-card"><div><h3>Appearance</h3><p>Choose how Series Tracker looks on this device.</p></div>
+      <button type="button" class="settings-row-btn" data-theme-toggle><span class="settings-row-icon">◐</span><span><b>Theme</b><small>Switch between light and dark mode</small></span><span class="settings-chevron">›</span></button>
+    </section>
+    <section class="settings-card"><div><h3>Google Drive backup</h3><p>Sign in to keep a private backup in your Google Drive and sync it across devices.</p></div>
+      <button type="button" id="syncChip" class="settings-row-btn sync-settings-btn" data-state="off" aria-haspopup="dialog"><span class="chip-av" id="chipAv" aria-hidden="true"></span><span class="settings-row-icon cloud-icon">☁</span><span><b id="syncChipText">Back up</b><small id="settingsSyncSub">Not connected</small></span><i class="sdot"></i><span class="settings-chevron">›</span></button>
+    </section>
+    <section class="settings-card"><div><h3>Data</h3><p>Move your library between devices or keep an independent backup file.</p></div>
+      <button type="button" id="dataBtn" class="settings-row-btn" aria-haspopup="dialog"><span class="settings-row-icon">⇅</span><span><b>Import / Export</b><small>Excel, CSV, JSON and other supported files</small></span><span class="settings-chevron">›</span></button>
+    </section>
+    <section class="settings-card"><div><h3>App</h3><p>Install Series Tracker like a normal app when the browser supports it.</p></div>
+      <button type="button" id="installApp" class="settings-row-btn" hidden><span class="settings-row-icon">＋</span><span><b>Install app</b><small>Add Series Tracker to your home screen</small></span><span class="settings-chevron">›</span></button>
+      <p class="hint"><a href="privacy.html">Privacy &amp; terms</a></p>
+      <p id="installHint" class="hint">Installation becomes available after the app is hosted over HTTPS.</p>
+    </section>
+    <section class="settings-card"><div><h3>About &amp; credits</h3><p>Where show information comes from.</p></div>
+      <p class="hint">Show details and posters are provided by <a href="https://www.tvmaze.com" target="_blank" rel="noopener noreferrer">TVmaze</a> under <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener noreferrer">CC BY-SA 4.0</a>. Posters belong to their respective owners.</p>
+      <p class="hint">If you add a TMDB key, some details also come from <a href="https://www.themoviedb.org" target="_blank" rel="noopener noreferrer">TMDB</a>. This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
+      <p class="hint">Series Tracker is an independent app. It is not affiliated with any streaming service, studio or network. It is provided "as is", without warranty. Keep your own export of your list if it matters to you. <a href="privacy.html">Privacy &amp; terms</a></p>
+    </section>
+  </div>
+</section>
+
+<!-- Install gate -->
+<section id="gate" class="login" hidden aria-labelledby="gateTitle">
+  <div class="login-inner">
+    <div class="fan" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="login-card">
+      <h1 id="gateTitle">Install Series Tracker</h1>
+      <p class="login-sub">This app works only when it is installed on your device. Install it, then open it from your home screen or app list.</p>
+      <button type="button" id="gateInstall" class="primary big" hidden>Install app</button>
+      <ol id="gateSteps" class="gate-steps"></ol>
+      <p id="gateDone" class="msg ok" role="status" hidden>Installed. Close this tab and open Series Tracker from your home screen or app list.</p>
+      <p class="login-fine"><a href="privacy.html">Privacy &amp; terms</a></p>
+    </div>
+  </div>
+</section>
+
+<!-- Login -->
+<section id="login" class="login" hidden aria-labelledby="loginTitle">
+
+  <div class="login-inner">
+    <div class="fan" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="login-card">
+      <h1 id="loginTitle">Series Tracker</h1>
+      <p class="login-sub">Every drama you're watching, finished, or paused, in one place.</p>
+      <button type="button" id="loginGoogle" class="gbtn big">
+        <svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+        Continue with Google
+      </button>
+      <button type="button" id="loginGuest" class="ghost login-guest">Continue without signing in</button>
+      <div id="loginSetupHost"></div>
+      <p id="loginMsg" class="msg" role="status" aria-live="polite"></p>
+      <p class="login-fine">Signing in keeps a private backup of your list in your own Google Drive, so it follows you to any device. Without signing in, your list stays in this browser. <a href="privacy.html">Privacy &amp; terms</a></p>
+    </div>
+  </div>
+</section>
+
+<!-- Add / edit show -->
+<dialog id="showDlg" aria-labelledby="showTitle">
+  <form id="showForm" class="dlg-body" novalidate>
+    <div class="dlg-head"><h2 id="showTitle">Add show</h2>
+      <button type="button" class="ghost icon-btn" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="form">
+      <div class="field"><label for="fName">Show name</label>
+        <input id="fName" type="text" autocomplete="off" placeholder="Start typing a show name"></div>
+      <div id="lookup" class="lookup" aria-live="polite"></div>
+      <div id="manualBox" class="manual" hidden>
+        <div class="row2">
+          <div class="field"><label for="fLang">Language</label>
+            <input id="fLang" type="text" list="langList" autocomplete="off" placeholder="e.g. Korean"><datalist id="langList"></datalist></div>
+          <div class="field"><label for="fShowStatus">Show status</label>
+            <select id="fShowStatus"><option>Unknown</option><option>Ongoing</option><option>Ended</option><option>Cancelled</option></select></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label for="fSeasons">Seasons</label><input id="fSeasons" type="number" min="1" step="1" inputmode="numeric"></div>
+          <div class="field"><label for="fEpisodes">Episodes</label><input id="fEpisodes" type="number" min="1" step="1" inputmode="numeric"></div>
+        </div>
+      </div>
+      <fieldset class="field">
+        <legend class="lbl">My status</legend>
+        <div class="seg-group">
+          <label class="st-watching"><input type="radio" name="my" value="Watching" checked><span>Watching</span></label>
+          <label class="st-completed"><input type="radio" name="my" value="Completed"><span>Completed</span></label>
+          <label class="st-onhold"><input type="radio" name="my" value="On Hold"><span>On Hold</span></label>
+          <label class="st-dropped"><input type="radio" name="my" value="Dropped"><span>Dropped</span></label>
+          <label class="st-plantowatch"><input type="radio" name="my" value="Plan to Watch"><span>Plan to Watch</span></label>
+        </div>
+      </fieldset>
+      <div class="field" id="dropField" hidden>
+        <label for="fDroppedAt">Dropped at episode</label>
+        <input id="fDroppedAt" type="number" min="1" step="1" inputmode="numeric" placeholder="Optional, e.g. 5">
+      </div>
+      <div class="field">
+        <label for="fNotes">Notes</label>
+        <textarea id="fNotes" rows="3" maxlength="2000" placeholder="Anything you want to remember about this show"></textarea>
+      </div>
+      <p id="formError" class="error" role="alert" hidden></p>
+      <div class="dlg-actions"><button type="button" data-close>Cancel</button><button type="submit" class="primary" id="saveShowBtn">Save show</button></div>
+    </div>
+  </form>
+</dialog>
+
+<!-- Backup and sync -->
+<dialog id="syncDlg" aria-labelledby="syncTitle">
+  <div class="dlg-body">
+    <div class="dlg-head"><h2 id="syncTitle">Backup and sync</h2>
+      <button type="button" class="ghost icon-btn" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <p class="lede">Your library is saved in this browser. Sign in with Google to keep a copy in Google Drive, in a private app folder that only this tracker can open.</p>
+
+    <section id="syncOut" class="sync-sec">
+      <button type="button" id="googleSignIn" class="gbtn">
+        <svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+        Sign in with Google
+      </button>
+      <details id="setup" class="setup">
+        <summary>Google project settings</summary>
+        <div class="field">
+          <label for="clientIdInput">OAuth client ID</label>
+          <div class="inline"><input id="clientIdInput" type="text" spellcheck="false" autocomplete="off" placeholder="123456-abc.apps.googleusercontent.com"><button type="button" id="saveClientId">Save</button></div>
+        </div>
+        <p id="fileWarn" class="error" hidden style="margin-top:10px">Google sign-in doesn't work when this page is opened as a file. Serve it over http (for example <code>python3 -m http.server</code>, then open <code>http://localhost:8000</code>) or host it on GitHub Pages or Netlify.</p>
+        <ol>
+          <li>In Google Cloud Console, create a project and turn on the Google Drive API.</li>
+          <li>Set up the OAuth consent screen. While it's in Testing, add your Gmail address as a test user, and add the <code>drive.appdata</code> scope.</li>
+          <li>Create credentials, choose OAuth client ID, then Web application.</li>
+          <li>Under Authorized JavaScript origins, add <code id="origin"></code></li>
+          <li>Copy the client ID, paste it above, and save.</li>
+        </ol>
+      </details>
+    </section>
+
+    <section id="syncIn" class="sync-sec" hidden>
+      <div class="account">
+        <div class="avatar" id="avatar"></div>
+        <div><b id="acctName"></b><span class="muted" id="acctEmail"></span></div>
+      </div>
+      <p class="status-line" id="syncStatus"></p>
+      <div class="btn-row">
+        <button type="button" class="primary" id="backupNow">Back up now</button>
+        <button type="button" id="restoreNow">Restore from Drive</button>
+      </div>
+      <label class="check"><input type="checkbox" id="autoBackup">Back up automatically after changes</label>
+      <div class="btn-row"><button type="button" class="ghost" id="signOut">Sign out</button></div>
+    </section>
+
+    <p id="syncMsg" class="msg" role="status" aria-live="polite"></p>
+
+  </div>
+</dialog>
+
+<!-- Dropped at which episode -->
+<dialog id="dropDlg" aria-labelledby="dropTitle">
+  <form id="dropForm" class="dlg-body" novalidate>
+    <h2 id="dropTitle">Which episode did you stop at?</h2>
+    <p class="lede" id="dropSub"></p>
+    <div class="form">
+      <div class="field"><label for="dropEp">Episode number</label>
+        <input id="dropEp" type="number" min="1" step="1" inputmode="numeric" placeholder="e.g. 5"></div>
+      <p id="dropErr" class="error" role="alert" hidden></p>
+      <div class="dlg-actions"><button type="button" id="dropSkip">Skip</button><button type="submit" class="primary">Save</button></div>
+    </div>
+  </form>
+</dialog>
+
+<!-- Sync conflict -->
+<dialog id="conflictDlg" aria-labelledby="cTitle">
+  <div class="dlg-body">
+    <h2 id="cTitle">Your library and Drive differ</h2>
+    <p class="lede">Both copies have changes the other doesn't. Choose what to keep.</p>
+    <div class="compare">
+      <div><span>This device</span><b id="cLocal">0</b><span id="cLocalSub">shows</span></div>
+      <div><span>Google Drive</span><b id="cRemote">0</b><span id="cRemoteSub">shows</span></div>
+    </div>
+    <div class="stack">
+      <button type="button" class="primary" id="cMerge">Merge both</button>
+      <button type="button" id="cDrive">Use the Drive copy</button>
+      <button type="button" id="cDevice">Keep this device's copy</button>
+    </div>
+    <p class="hint">Merging keeps every show from both copies. If a show is in both, the version edited most recently is kept.</p>
+  </div>
+</dialog>
+
+<!-- Import and export -->
+<dialog id="dataDlg" aria-labelledby="dataTitle">
+  <div class="dlg-body">
+    <div class="dlg-head"><h2 id="dataTitle">Import and export</h2>
+      <button type="button" class="ghost icon-btn" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <section class="sync-sec">
+      <h3>Export</h3>
+      <p class="hint">Download your whole library. The Excel file has one row per show, and you can import it again later.</p>
+      <div class="btn-row">
+        <button type="button" class="primary" id="exportXlsx">Download Excel (.xlsx)</button>
+        <button type="button" id="exportJson">Backup file (.json)</button>
+      </div>
+    </section>
+    <section class="sync-sec">
+      <h3>Import</h3>
+      <p class="hint">Add shows from an Excel sheet, CSV, Word document (.docx), text file, or a backup file. You'll review everything before anything is added.</p>
+      <div class="btn-row"><button type="button" class="primary" id="pickFile">Choose a file</button></div>
+      <input type="file" id="importFile" accept=".xlsx,.xls,.xlsm,.xlsb,.ods,.csv,.tsv,.docx,.doc,.txt,.md,.json" hidden>
+    </section>
+    <section class="sync-sec">
+      <h3>Show details</h3>
+      <p class="hint">Language, seasons, episodes, show status, and posters are looked up online when you add a show. <span id="missingCount"></span></p>
+      <div class="btn-row"><button type="button" id="fillBtn">Fill in missing details</button>
+        <button type="button" id="testConn">Test connection</button></div>
+      <details class="setup">
+        <summary>Better results for Korean and Chinese dramas</summary>
+        <p class="hint" style="margin-top:10px">Shows are looked up on TVmaze. Adding a free TMDB key searches TMDB as well, which covers many more Asian dramas.</p>
+        <div class="field">
+          <label for="tmdbKey">TMDB API key</label>
+          <div class="inline"><input id="tmdbKey" type="text" spellcheck="false" autocomplete="off" placeholder="Paste your API key"><button type="button" id="saveTmdb">Save</button></div>
+        </div>
+        <ol>
+          <li>Create a free account at themoviedb.org.</li>
+          <li>Open Settings, then API, and request a key for personal use.</li>
+          <li>Copy the API Key (v3) or the API Read Access Token and paste it above.</li>
+        </ol>
+      </details>
+    </section>
+    <p id="dataMsg" class="msg" role="status" aria-live="polite"></p>
+  </div>
+</dialog>
+
+<!-- Import review -->
+<dialog id="importDlg" aria-labelledby="impTitle">
+  <div class="dlg-body">
+    <div class="dlg-head"><h2 id="impTitle">Import shows</h2>
+      <button type="button" class="ghost icon-btn" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <p class="lede" id="impFile"></p>
+    <div class="form">
+      <div class="field" id="impSheetField" hidden><label for="impSheet">Sheet</label><select id="impSheet"></select></div>
+      <label class="check"><input type="checkbox" id="impHeader">First row has column names</label>
+      <div class="map-grid" id="impMap"></div>
+      <div class="field"><label for="impDefault">Status for shows that don't have one</label>
+        <select id="impDefault"><option>Watching</option><option>Completed</option><option>On Hold</option><option>Dropped</option><option>Plan to Watch</option></select></div>
+      <label class="check"><input type="checkbox" id="impUpdate">Update shows that are already in my library</label>
+      <label class="check"><input type="checkbox" id="impLookup" checked>Look up missing details and posters online</label>
+      <div class="preview" id="impPreview" aria-live="polite"></div>
+      <div class="dlg-actions"><button type="button" data-close>Cancel</button><button type="button" class="primary" id="impGo">Import</button></div>
+    </div>
+  </div>
+</dialog>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script src="js/config.js"></script>
+<script src="js/store.js"></script>
+<script src="js/render.js"></script>
+<script src="js/lookup.js"></script>
+<script src="js/editor.js"></script>
+<script src="js/importexport.js"></script>
+<script src="js/sync.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
