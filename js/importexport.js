@@ -1,7 +1,7 @@
 "use strict";
 
 /* ---------- import and export (Excel, CSV, Word, text, JSON) ---------- */
-const payload = () => ({app: "series-tracker", version: 1, savedAt: new Date().toISOString(), shows: data});
+const payload = () => ({app: "series-tracker", version: 1, savedAt: new Date().toISOString(), shows: appOrder(data)});
 const today = () => new Date().toISOString().slice(0, 10);
 function dataMsg(text, kind) { const el = $("dataMsg"); el.textContent = text || ""; el.className = "msg " + (kind || ""); }
 function download(blob, name) {
@@ -43,7 +43,7 @@ function loadLib(key) {
 /* export */
 const XLSX_COLUMNS = ["Show", "Language", "Show status", "My status", "Seasons", "Episodes", "Dropped at episode", "Notes"];
 function libraryRows() {
-  return [...data].sort(SORTS.title).map(s => ({
+  return appOrder(data).map(s => ({
     "Show": s.name, "Language": s.language, "Show status": s.showStatus, "My status": s.myStatus,
     "Seasons": s.seasons ?? "", "Episodes": s.episodes ?? "",
     "Dropped at episode": s.droppedAt ?? "", "Notes": s.notes || ""

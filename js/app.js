@@ -39,6 +39,10 @@ $("addBtn").onclick = () => openShowDialog(null, $("newName").value.trim(), defa
 $("newName").addEventListener("keydown", e => { if (e.key === "Enter") openShowDialog(null, $("newName").value.trim(), defaultMyStatus()); });
 ["search", "statusFilter", "showFilter", "langFilter", "sortBy"].forEach(id => $(id).addEventListener("input", render));
 $("clearFilters").onclick = clearFilters;
+$("airing").onclick = () => {
+  tab = "library";
+  const f = $("showFilter"); f.value = f.value === "Ongoing" ? "" : "Ongoing"; render();
+};
 $("legend").addEventListener("click", e => {
   const b = e.target.closest("[data-status]"); if (!b) return;
   tab = "library";

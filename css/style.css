@@ -360,10 +360,6 @@ body.settings-open .wrap{visibility:hidden;}
   .data-btn{padding:6px 11px}
   .data-btn .lbl{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 }
-@media (max-width:480px){
-  #syncChipText{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-  #syncChip{padding:6px 12px}
-}
 @media (max-width:420px){
   .facts{grid-template-columns:repeat(2,minmax(0,1fr))}
   .map-grid{grid-template-columns:1fr}
@@ -382,3 +378,17 @@ body.settings-open .wrap{visibility:hidden;}
 .gate-steps li:first-child{border-top:0}
 .gate-steps li::before{content:counter(s);position:absolute;left:0;top:9px;width:26px;height:26px;border-radius:50%;background:var(--surface-2);color:var(--accent);font-weight:700;font-size:13px;display:grid;place-items:center}
 #gateDone{margin-top:14px}
+
+/* Settings > Google Drive backup row: keep icon, text, status dot and arrow in their own columns */
+.sync-settings-btn.has-av .chip-av{display:grid;background:var(--surface-2);color:var(--accent);font-weight:700}
+.sync-settings-btn .cloud-icon,.sync-settings-btn .chip-av{grid-column:1;grid-row:1}
+.sync-settings-btn .row-text{grid-column:2;grid-row:1;min-width:0}
+.sync-settings-btn .sdot{grid-column:3;grid-row:1}
+.sync-settings-btn .settings-chevron{grid-column:4;grid-row:1}
+.sync-settings-btn[data-state=ok] .sdot{background:var(--completed)}
+.sync-settings-btn[data-state=needs-auth] .sdot{background:var(--onhold)}
+.sync-settings-btn[data-state=error] .sdot{background:var(--dropped)}
+.sync-settings-btn[data-state=syncing] .sdot{background:var(--accent);animation:pulse 1s ease-in-out infinite}
+/* "still airing" filter chip */
+.airing-chip{--c:var(--accent);margin-left:0}
+.airing-chip[hidden]{display:none}

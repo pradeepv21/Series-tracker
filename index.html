@@ -51,7 +51,7 @@ if(q.addEventListener)q.addEventListener("change",function(){if(!t)apply()});})(
       <div class="total"><span id="total">0</span><small id="totalLabel">shows</small></div>
       <div>
         <div class="bar" id="bar" role="img"></div>
-        <div class="legend"><span id="legend" style="display:contents"></span><span class="airing" id="airing"></span></div>
+        <div class="legend"><span id="legend" style="display:contents"></span><button type="button" class="chip airing-chip" id="airing" aria-pressed="false" hidden></button></div>
       </div>
     </section>
 
@@ -77,7 +77,7 @@ if(q.addEventListener)q.addEventListener("change",function(){if(!t)apply()});})(
       <div class="ctl"><label for="langFilter">Language</label>
         <select id="langFilter"><option value="">All</option></select></div>
       <div class="ctl"><label for="sortBy">Sort by</label>
-        <select id="sortBy"><option value="new">Newest first</option><option value="title">Title A–Z</option><option value="status">My watching status</option></select></div>
+        <select id="sortBy"><option value="new">Newest first</option><option value="title">Title A–Z</option><option value="status">My watching status</option><option value="airing">Still airing first</option></select></div>
     </div>
 
     <div class="list-meta"><div class="lm-left"><span id="count"></span><span id="enrich" aria-live="polite"></span></div><button type="button" id="clearFilters" class="ghost" hidden>Clear filters</button></div>
@@ -106,7 +106,7 @@ if(q.addEventListener)q.addEventListener("change",function(){if(!t)apply()});})(
       <button type="button" class="settings-row-btn" data-theme-toggle><span class="settings-row-icon">◐</span><span><b>Theme</b><small>Switch between light and dark mode</small></span><span class="settings-chevron">›</span></button>
     </section>
     <section class="settings-card"><div><h3>Google Drive backup</h3><p>Sign in to keep a private backup in your Google Drive and sync it across devices.</p></div>
-      <button type="button" id="syncChip" class="settings-row-btn sync-settings-btn" data-state="off" aria-haspopup="dialog"><span class="chip-av" id="chipAv" aria-hidden="true"></span><span class="settings-row-icon cloud-icon">☁</span><span><b id="syncChipText">Back up</b><small id="settingsSyncSub">Not connected</small></span><i class="sdot"></i><span class="settings-chevron">›</span></button>
+      <button type="button" id="syncChip" class="settings-row-btn sync-settings-btn" data-state="off" aria-haspopup="dialog"><span class="chip-av" id="chipAv" aria-hidden="true"></span><span class="settings-row-icon cloud-icon">☁</span><span class="row-text"><b id="syncChipText">Back up</b><small id="settingsSyncSub">Not connected</small></span><i class="sdot"></i><span class="settings-chevron">›</span></button>
     </section>
     <section class="settings-card"><div><h3>Data</h3><p>Move your library between devices or keep an independent backup file.</p></div>
       <button type="button" id="dataBtn" class="settings-row-btn" aria-haspopup="dialog"><span class="settings-row-icon">⇅</span><span><b>Import / Export</b><small>Excel, CSV, JSON and other supported files</small></span><span class="settings-chevron">›</span></button>

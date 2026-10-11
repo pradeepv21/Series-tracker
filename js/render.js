@@ -41,8 +41,11 @@ function notify(text, opts = {}) {
 const SORTS = {
   new: (a, b) => b.id - a.id,
   title: (a, b) => a.name.localeCompare(b.name),
-  status: (a, b) => MY.indexOf(a.myStatus) - MY.indexOf(b.myStatus) || a.name.localeCompare(b.name)
+  status: (a, b) => MY.indexOf(a.myStatus) - MY.indexOf(b.myStatus) || a.name.localeCompare(b.name),
+  airing: (a, b) => (b.showStatus === "Ongoing") - (a.showStatus === "Ongoing") || b.id - a.id
 };
+// the order shown in the app (follows the "Sort by" choice); exports and the Drive backup use it too
+const appOrder = list => [...list].sort(SORTS[$("sortBy").value] || SORTS.new);
 const isFiltered = () => !!($("search").value.trim() || $("statusFilter").value || $("showFilter").value || $("langFilter").value);
 
 function visible() {
@@ -95,8 +98,10 @@ function renderSummary() {
   const active = $("statusFilter").value;
   $("legend").innerHTML = LIB.map(k =>
     `<button type="button" class="chip st-${slug(k)}" data-status="${k}" aria-pressed="${active === k}"><i></i>${k} <b>${counts[k]}</b></button>`).join("");
-  const airing = lib.filter(x => x.showStatus === "Ongoing").length;
-  $("airing").textContent = airing ? `${airing} still airing` : "";
+  const airing = lib.filter(x => x.showStatus === "Ongoing").length, onlyAiring = $("showFilter").value === "Ongoing", ab = $("airing");
+  ab.hidden = !airing && !onlyAiring;
+  ab.innerHTML = `<i></i>${airing} still airing`;
+  ab.setAttribute("aria-pressed", String(onlyAiring));
 }
 function renderTabs() {
   const plan = data.filter(isPlan).length;
