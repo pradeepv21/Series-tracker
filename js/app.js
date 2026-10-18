@@ -70,11 +70,28 @@ $("dropForm").addEventListener("submit", e => {
 $("dropSkip").onclick = () => {
   const s = data.find(x => x.id === dropId); $("dropDlg").close(); if (s) toast(`Marked "${s.name}" as Dropped`);
 };
+// +1 / -1 episode on a show you are watching
+function stepEpisode(id, d, row) {
+  const s = data.find(x => x.id === id); if (!s || isPlan(s)) return;
+  const prev = JSON.stringify(data), was = s.myStatus, n = s.episodes;
+  s.watched = Math.max(0, watchedNow(s) + d);
+  if (n && s.watched >= n) { s.watched = n; s.myStatus = "Completed"; s.droppedAt = null; }
+  else if (d > 0 && s.myStatus === "On Hold") s.myStatus = "Watching";
+  s.updatedAt = Date.now(); save();
+  if (s.myStatus === was) {
+    refreshProg(row, s);
+    const again = row.querySelector(`[data-act="${d > 0 ? "inc" : "dec"}"]`); if (again && !again.disabled) again.focus();
+    return;
+  }
+  render();
+  toast(s.myStatus === "Completed" ? `Finished "${s.name}". Marked as Completed` : `Now watching "${s.name}"`, {undo: () => restore(prev)});
+}
 $("tbody").addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if (!b) return;
   const row = b.closest("tr[data-id]"), id = row ? Number(row.dataset.id) : null;
   if (b.dataset.act === "edit") openShowDialog(data.find(s => s.id === id));
   else if (b.dataset.act === "delete") deleteShow(id);
+  else if (b.dataset.act === "inc" || b.dataset.act === "dec") stepEpisode(id, b.dataset.act === "inc" ? 1 : -1, row);
   else if (b.dataset.act === "clear") clearFilters();
   else if (b.dataset.act === "add") openShowDialog(null, "", defaultMyStatus());
 });
@@ -82,13 +99,15 @@ $("tbody").addEventListener("change", e => {
   const sel = e.target.closest('select[data-act="status"]'); if (!sel) return;
   const row = sel.closest("tr[data-id]"), s = data.find(x => x.id === Number(row.dataset.id)); if (!s) return;
   const was = s.myStatus;
+  if (was === "Dropped" && s.droppedAt) s.watched = Math.max(s.watched || 0, s.droppedAt);   // resuming a dropped show keeps your place
   s.myStatus = sel.value; s.updatedAt = Date.now();
+  if (s.myStatus === "Completed" && s.episodes) s.watched = s.episodes;
   if (s.myStatus !== "Dropped") s.droppedAt = null;
   save();
   const f = $("statusFilter").value;
   const stays = (tab === "plan") === isPlan(s) && (!f || f === s.myStatus);
   if (!stays || s.myStatus === "Dropped" || was === "Dropped") render();     // otherwise just refresh the pill and counts, so focus stays put
-  else { row.querySelector(".c-my").className = "c-my st-" + slug(s.myStatus); renderSummary(); renderTabs(); }
+  else { row.querySelector(".c-my").className = "c-my st-" + slug(s.myStatus); refreshProg(row, s); renderSummary(); renderTabs(); }
   if (s.myStatus === "Dropped") return openDropDialog(s);
   toast((was === PLAN) !== isPlan(s) ? `Moved "${s.name}" to ${isPlan(s) ? "Plan to watch" : "My shows"}` : `Marked "${s.name}" as ${s.myStatus}`);
 });
@@ -130,7 +149,10 @@ $("saveClientId").onclick = () => {
 };
 $("backupNow").onclick = () => { msg(""); runBackup(true); };
 $("restoreNow").onclick = restoreNow;
-$("signOut").onclick = signOut;
+$("signOut").onclick = openSignOut;
+$("soCancel").onclick = () => $("signOutDlg").close();
+$("soKeep").onclick = signOutKeep;
+$("soClear").onclick = signOutAndClear;
 $("autoBackup").onchange = e => { g.auto = e.target.checked; store(AUTO_KEY, g.auto ? "1" : "0"); if (g.auto) scheduleBackup(); };
 $("dataBtn").onclick = () => { dataMsg(""); refreshDataInfo(); $("dataDlg").showModal(); };
 $("fillBtn").onclick = () => { dataMsg(""); enrichMissing(); };

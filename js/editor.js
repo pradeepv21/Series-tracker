@@ -6,10 +6,10 @@ const getMyStatus = () => (document.querySelector('input[name="my"]:checked') ||
 const setMyStatus = v => { const r = document.querySelector(`input[name="my"][value="${v}"]`); if (r) r.checked = true; };
 const showDlg = $("showDlg");
 const missingFacts = s => s.language === "Unknown" || s.showStatus === "Unknown" || s.seasons == null || s.episodes == null;
-const needsDetails = s => missingFacts(s) || s.poster === "";
+const needsDetails = s => missingFacts(s) || s.poster === "" || !s.synopsis;
 
 const lk = {token: 0, timer: null, pending: null, status: "idle", meta: null, results: [], alts: [], query: "",
-  manual: false, dirty: false, onlyMissing: false, warned: false, errorDetail: "", poster: ""};
+  manual: false, dirty: false, onlyMissing: false, warned: false, errorDetail: "", poster: "", synopsis: ""};
 
 function currentFacts() {
   return {language: $("fLang").value.trim() || "Unknown", showStatus: $("fShowStatus").value,
@@ -32,11 +32,13 @@ function foundCard() {
   const cell = (l, v) => `<div><span>${l}</span><b>${esc(v)}</b></div>`;
   const alts = lk.alts.length ? `<div class="alts"><span class="lbl">Not the right show?</span>${lk.alts.map((a, i) =>
     `<button type="button" class="alt" data-alt="${i}">${esc(a.title)}<span>${esc([a.year, a.language].filter(Boolean).join(", "))}</span></button>`).join("")}</div>` : "";
+  const plot = (saved ? lk.synopsis : (m && m.synopsis) || "");
+  const plotHtml = plot ? `<p class="plot">${esc(plot.length > 240 ? plot.slice(0, 237).trimEnd() + "…" : plot)}</p>` : "";
   const weak = !saved && m && m.score != null && m.score < 0.75 ? `<p class="hint">Closest match. Check that this is the right show.</p>` : "";
   return `<div class="found"><div class="found-top">${pic}<div class="found-main">
     <div class="found-head"><b>${esc(title)}</b>${year ? `<span>${esc(year)}</span>` : ""}</div>
     <div class="facts">${cell("Language", f.language)}${cell("Show status", f.showStatus)}${cell("Seasons", f.seasons ?? "—")}${cell("Episodes", f.episodes ?? "—")}</div></div></div>
-    <p class="hint">${saved ? "Saved in your library." : "Filled in from " + esc(srcLabel(m)) + "."}</p>${weak}
+    ${plotHtml}<p class="hint">${saved ? "Saved in your library." : "Filled in from " + esc(srcLabel(m)) + "."}</p>${weak}
     <div class="found-actions"><button type="button" class="ghost" data-lk="manual">${lk.manual ? "Hide details editor" : "Edit details"}</button>${
       saved ? `<button type="button" class="ghost" data-lk="refresh">Look up again</button>` : ""}</div>${alts}</div>`;
 }
@@ -109,21 +111,27 @@ async function chooseAlt(i) {
 }
 
 function showError(text) { const e = $("formError"); e.textContent = text || ""; e.hidden = !text; }
-function syncDropField() { $("dropField").hidden = getMyStatus() !== "Dropped"; }
+function syncDropField() {
+  const st = getMyStatus();
+  $("dropField").hidden = st !== "Dropped"; $("watchField").hidden = !(st === "Watching" || st === "On Hold");
+}
 function openShowDialog(show, preset = "", status = "Watching") {
   editingId = show ? show.id : null; showError("");
   clearTimeout(lk.timer); lk.timer = null; lk.token++; lk.pending = null;
-  Object.assign(lk, {status: "idle", meta: null, results: [], alts: [], query: "", manual: false, dirty: false, onlyMissing: false, warned: false, poster: ""});
+  Object.assign(lk, {status: "idle", meta: null, results: [], alts: [], query: "", manual: false, dirty: false, onlyMissing: false, warned: false, poster: "", synopsis: ""});
   $("showTitle").textContent = show ? "Edit show" : "Add show";
   $("fName").value = show ? show.name : preset;
   $("fLang").value = show && show.language !== "Unknown" ? show.language : "";
   $("fShowStatus").value = show ? show.showStatus : "Unknown";
   $("fSeasons").value = show?.seasons ?? ""; $("fEpisodes").value = show?.episodes ?? "";
   setMyStatus(show ? show.myStatus : status);
-  $("fDroppedAt").value = show?.droppedAt ?? ""; $("fNotes").value = show?.notes ?? ""; syncDropField();
+  $("fDroppedAt").value = show?.droppedAt ?? ""; $("fNotes").value = show?.notes ?? "";
+  $("fWatched").value = (!show || show.myStatus === "Completed" || isPlan(show) ? "" : show.myStatus === "Dropped"
+    ? Math.max(show.watched || 0, show.droppedAt || 0) : show.watched) || "";
+  syncDropField();
   if (show) {
     lk.status = "saved"; lk.query = show.name;
-    lk.poster = show.poster || "";
+    lk.poster = show.poster || ""; lk.synopsis = show.synopsis || "";
     if (missingFacts(show)) { lk.onlyMissing = true; scheduleLookup(); }
   } else if (preset.trim()) scheduleLookup();
   renderLookup();
@@ -146,13 +154,26 @@ async function saveShow(e) {
   const status = getMyStatus();
   const droppedAt = status === "Dropped" ? intOrNull($("fDroppedAt").value) : null;
   if (droppedAt && f.episodes && droppedAt > f.episodes) return showError(`This show has ${f.episodes} episodes. Enter an episode from 1 to ${f.episodes}.`);
+  const prior0 = editingId !== null ? data.find(x => x.id === editingId) : null;
+  let watched = prior0 ? Math.max(prior0.watched || 0, prior0.myStatus === "Dropped" ? prior0.droppedAt || 0 : 0) : 0;
+  if (status === "Watching" || status === "On Hold") {
+    const raw = $("fWatched").value.trim();
+    if (raw !== "" && raw !== "0" && !intOrNull(raw)) return showError("Enter the number of episodes you have watched, or leave it empty.");
+    watched = intOrNull(raw) || 0;
+    if (f.episodes && watched > f.episodes) return showError(`This show has ${f.episodes} episodes. Enter a number from 0 to ${f.episodes}.`);
+  } else if (status === "Completed") watched = f.episodes || watched;
+  else if (status === "Dropped") watched = droppedAt || watched;
+  const autoDone = (status === "Watching" || status === "On Hold") && f.episodes && watched >= f.episodes;
   let name = typed;
   if (lk.status === "found" && !lk.onlyMissing && lk.meta && lk.meta.title && titleScore(typed, lk.meta.title) >= 0.5) name = lk.meta.title;
   if (dupOf(name)) return showError(`"${dupOf(name).name}" is already in your library.`);
-  const isEdit = editingId !== null, prior = isEdit ? data.find(x => x.id === editingId) : null;
+  const isEdit = editingId !== null, prior = isEdit ? data.find(x => x.id === editingId) : null, oldName = prior ? prior.name : "";
   const found = lk.status === "found" && lk.meta ? lk.meta.poster || "" : "";
   const poster = found && (!lk.onlyMissing || !posterUrl(prior)) ? found : (prior ? prior.poster : "");
-  const rec = {name, ...f, myStatus: status, updatedAt: Date.now(), poster, notes: $("fNotes").value.trim().slice(0, 2000), droppedAt};
+  const fm = lk.status === "found" && lk.meta && lk.meta.synopsis && (!lk.onlyMissing || !(prior && prior.synopsis)) ? lk.meta : null;
+  const syn = fm ? {synopsis: fm.synopsis, synopsisSrc: fm.synopsisSrc || "", synopsisUrl: fm.synopsisUrl || ""}
+    : {synopsis: prior ? prior.synopsis : "", synopsisSrc: prior ? prior.synopsisSrc : "", synopsisUrl: prior ? prior.synopsisUrl : ""};
+  const rec = {name, ...f, myStatus: autoDone ? "Completed" : status, watched, updatedAt: Date.now(), poster, ...syn, notes: $("fNotes").value.trim().slice(0, 2000), droppedAt};
   if (isEdit) Object.assign(data.find(s => s.id === editingId), rec);
   else data.push({id: newId(), ...rec});
   const shown = isEdit ? prior : data[data.length - 1];
@@ -161,7 +182,8 @@ async function saveShow(e) {
   if (tab !== home) { tab = home; if (home === "plan") $("statusFilter").value = ""; }
   render();
   if (!visible().some(x => x.id === shown.id)) clearFilters();   // a search or filter would otherwise hide it
-  toast((isEdit ? "Changes saved" : `Added "${name}"`) + (missingFacts(shown) ? ". Its details will fill in automatically if they can be found." : ""));
+  toast((isEdit ? "Changes saved" : `Added "${name}"`) + (autoDone ? ". All episodes watched, so it is now Completed" : "") + (missingFacts(shown) ? ". Its details will fill in automatically if they can be found." : ""));
+  clearMiss(oldName); clearMiss(name);          // a new or renamed show deserves a fresh search
   if (needsDetails(shown)) enrichMissing([shown], {silent: true});
 }
 
@@ -170,7 +192,7 @@ let enriching = false;
 function setEnrich(text) { $("enrich").innerHTML = text ? `<span class="spin" aria-hidden="true"></span>${esc(text)}` : ""; }
 function refreshDataInfo() {
   const n = data.filter(needsDetails).length;
-  $("missingCount").textContent = n ? `${n} ${n === 1 ? "show is" : "shows are"} missing details or a poster.` : "Every show has its details and poster.";
+  $("missingCount").textContent = n ? `${n} ${n === 1 ? "show is" : "shows are"} missing details, a poster or a synopsis.` : "Every show has its details, poster and synopsis.";
   $("fillBtn").disabled = !n || enriching;
   $("tmdbKey").value = tmdbKey;
 }
@@ -189,16 +211,18 @@ async function fillShow(s) {
     if (s.seasons == null && m.seasons) { s.seasons = m.seasons; gotFacts = true; }
     if (s.episodes == null && m.episodes) { s.episodes = m.episodes; gotFacts = true; }
     if (s.poster === "" && m.poster) { s.poster = m.poster; gotPoster = true; }
+    if (!s.synopsis && m.synopsis) { s.synopsis = m.synopsis; s.synopsisSrc = m.synopsisSrc || ""; s.synopsisUrl = m.synopsisUrl || ""; gotFacts = true; }
   }
   if (s.poster === "") {
     if (m && m.provider === "builtin") { const u = await posterFor(s.name); s.poster = u || "none"; gotPoster = !!u; }
     else if (m || !factsMissing) s.poster = "none";        // looked online and there is no poster to be had
   }
+  if (needsDetails(s)) noteMiss(s); else clearMiss(s.name);   // whatever is still missing will not be searched again for a while
   return {found: !!m, factsMissing, changed: gotFacts || gotPoster};
 }
 async function enrichMissing(list, opts = {}) {
   if (enriching) return opts.silent ? undefined : dataMsg("Already looking up details in the background. Try again in a moment.");
-  const ids = (list || data).filter(needsDetails).map(s => s.id);
+  const ids = (list || data).filter(s => needsDetails(s) && !(opts.skipMisses && recentMiss(s))).map(s => s.id);
   if (!ids.length) return opts.silent ? undefined : dataMsg("Every show already has its details.", "ok");
   enriching = true; refreshDataInfo();
   let checked = 0, filled = 0, notFound = 0, offline = false, why = "";

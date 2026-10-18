@@ -6,8 +6,19 @@ let tmdbKey = (localStorage.getItem(TMDB_STORE) || "").trim();
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const intOrNull = v => { const x = Math.round(Number(v)); return String(v ?? "").trim() !== "" && x > 0 ? x : null; };
 
+// Turn HTML (TVmaze summaries) or plain text into one clean paragraph
+const plainText = h => (new DOMParser().parseFromString(String(h || ""), "text/html").body.textContent || "").replace(/\s+/g, " ").trim().slice(0, 1200);
+
+// Remember shows that no online source could fill in, so the app does not search for them again on every visit.
+// Kept on this device only. A show is tried again after 30 days, when it is renamed, or when you ask for it.
+const MISS_KEY = "seriesTracker.lookupMiss", MISS_DAYS = 30;
+const readMiss = () => { const m = readJSON(MISS_KEY); return m && typeof m === "object" && !Array.isArray(m) ? m : {}; };
+const recentMiss = s => { const t = readMiss()[norm(s.name)]; return !!t && Date.now() - t < MISS_DAYS * 864e5; };
+function noteMiss(s) { const m = readMiss(); m[norm(s.name)] = Date.now(); store(MISS_KEY, JSON.stringify(m)); }
+function clearMiss(name) { if (!name) return; const m = readMiss(), k = norm(name); if (k in m) { delete m[k]; store(MISS_KEY, JSON.stringify(m)); } }
+
 let cspBlocked = false;
-document.addEventListener("securitypolicyviolation", e => { if (/tvmaze|themoviedb/.test(e.blockedURI || "")) cspBlocked = true; });
+document.addEventListener("securitypolicyviolation", e => { if (/tvmaze|themoviedb|wikipedia|wikidata/.test(e.blockedURI || "")) cspBlocked = true; });
 async function getJSON(url, opts = {}) {
   for (let attempt = 0; attempt < 2; attempt++) {
     const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 9000);
@@ -56,7 +67,8 @@ const PROVIDERS = {
       return (Array.isArray(r) ? r : []).map(x => x && x.show).filter(Boolean).slice(0, 5).map(x => ({
         provider: "tvmaze", id: x.id, title: x.name, year: (x.premiered || "").slice(0, 4),
         language: x.language === "Mandarin" ? "Chinese" : x.language || null, showStatus: tvStatus(x.status),
-        poster: x.image && x.image.medium ? String(x.image.medium).replace(/^http:/, "https:") : ""}));
+        poster: x.image && x.image.medium ? String(x.image.medium).replace(/^http:/, "https:") : "",
+        synopsis: plainText(x.summary), synopsisSrc: "TVmaze", synopsisUrl: /^https?:/.test(x.url || "") ? String(x.url).replace(/^http:/, "https:") : ""}));
     },
     async details(it) {
       let eps = [];
@@ -71,7 +83,8 @@ const PROVIDERS = {
       const r = await tmdbReq("/search/tv", {query: q, include_adult: "false"});
       return ((r && r.results) || []).slice(0, 5).map(x => ({
         provider: "tmdb", id: x.id, title: x.name, year: (x.first_air_date || "").slice(0, 4), language: langName(x.original_language), showStatus: null,
-        poster: x.poster_path ? "https://image.tmdb.org/t/p/w185" + x.poster_path : ""}));
+        poster: x.poster_path ? "https://image.tmdb.org/t/p/w185" + x.poster_path : "",
+        synopsis: plainText(x.overview), synopsisSrc: "TMDB", synopsisUrl: "https://www.themoviedb.org/tv/" + x.id}));
     },
     async details(it) {
       const d = await tmdbReq("/tv/" + it.id);
@@ -79,6 +92,40 @@ const PROVIDERS = {
       return {...it, language: langName(d.original_language) || it.language, showStatus: tmdbStatus(d.status) || it.showStatus,
         seasons: real.length || d.number_of_seasons || null,
         episodes: real.reduce((a, x) => a + (x.episode_count || 0), 0) || d.number_of_episodes || null};
+    }
+  },
+  // Backup source for shows TVmaze and TMDB don't know. Wikipedia text is licensed CC BY-SA 4.0, so it is always shown with its source.
+  wikipedia: {
+    label: "Wikipedia",
+    async search(q) {
+      const u = new URL("https://en.wikipedia.org/w/api.php");
+      Object.entries({action: "query", format: "json", formatversion: "2", origin: "*", generator: "search", gsrsearch: q + " television series",
+        gsrlimit: "6", prop: "extracts|pageprops", exintro: "1", explaintext: "1", exsentences: "5", exlimit: "max", ppprop: "wikibase_item"})
+        .forEach(([k, v]) => u.searchParams.set(k, v));
+      const r = await getJSON(u.toString()), pages = (r && r.query && r.query.pages) || [];
+      return (Array.isArray(pages) ? pages : Object.values(pages)).filter(p => p && p.extract && /television|TV series|web series|drama|sitcom|miniseries|anime|telenovela|soap opera/i.test(p.extract.slice(0, 400)))
+        .sort((a, b) => (a.index || 99) - (b.index || 99)).slice(0, 4).map(p => ({
+          provider: "wikipedia", id: p.pageid, wikidata: (p.pageprops || {}).wikibase_item || "",
+          title: String(p.title).replace(/\s*\([^()]*\)\s*$/, ""), year: (String(p.extract).match(/\b(?:19|20)\d{2}\b/) || [""])[0],
+          language: null, showStatus: null, poster: "",
+          synopsis: plainText(p.extract), synopsisSrc: "Wikipedia", synopsisUrl: "https://en.wikipedia.org/?curid=" + p.pageid}));
+    },
+    async details(it) {
+      if (!it.wikidata) return it;
+      try {
+        const wd = "https://www.wikidata.org/w/api.php?format=json&origin=*&action=wbgetentities&";
+        const c = (((await getJSON(wd + "props=claims&ids=" + it.wikidata)).entities || {})[it.wikidata] || {}).claims || {};
+        const num = p => { const n = Math.round(Number((((c[p] || [])[0] || {}).mainsnak?.datavalue?.value || {}).amount)); return n > 0 ? n : null; };
+        let language = null; const lid = ((c.P364 || [])[0] || {}).mainsnak?.datavalue?.value?.id;
+        if (lid) {
+          try {
+            const l = (((await getJSON(wd + "props=labels&languages=en&ids=" + lid)).entities || {})[lid] || {}).labels;
+            const t = String((l && l.en && l.en.value) || "").replace(/ language$/i, "").trim();
+            language = /cantonese/i.test(t) ? "Cantonese" : /chinese|mandarin/i.test(t) ? "Chinese" : t || null;
+          } catch (e) {}
+        }
+        return {...it, seasons: num("P2437"), episodes: num("P1113"), language, showStatus: (c.P582 || []).length ? "Ended" : null};
+      } catch (e) { return it; }
     }
   }
 };
@@ -88,12 +135,13 @@ async function searchOnline(q) {
   if (searchCache.has(key)) return searchCache.get(key);
   const names = tmdbKey ? ["tmdb", "tvmaze"] : ["tvmaze"];
   const settled = await Promise.allSettled(names.map(n => PROVIDERS[n].search(q)));
-  if (settled.every(x => x.status === "rejected")) throw settled[0].reason;
-  const seen = new Set(), out = [];
-  settled.forEach(x => x.status === "fulfilled" && x.value.forEach(it => {
-    const k = norm(it.title) + "|" + it.year;
-    if (!seen.has(k)) { seen.add(k); out.push(it); }
-  }));
+  const seen = new Set(), out = [], allFailed = settled.every(x => x.status === "rejected");
+  const add = list => list.forEach(it => { const k = norm(it.title) + "|" + it.year; if (!seen.has(k)) { seen.add(k); out.push(it); } });
+  settled.forEach(x => x.status === "fulfilled" && add(x.value));
+  if (!out.some(it => titleScore(q, it.title) >= 0.75)) {       // nothing close enough: ask Wikipedia as well
+    try { add(await PROVIDERS.wikipedia.search(q)); } catch (e) { if (allFailed) throw settled[0].reason; }
+  }
+  if (!out.length && allFailed) throw settled[0].reason;
   searchCache.set(key, out);
   return out;
 }

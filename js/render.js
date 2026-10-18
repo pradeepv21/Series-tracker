@@ -66,9 +66,30 @@ function posterHtml(s) {
 }
 const dropTag = s => s.myStatus === "Dropped" && s.droppedAt
   ? `<span class="drop-tag">Dropped at episode ${s.droppedAt}${s.episodes ? " of " + s.episodes : ""}</span>` : "";
+// How many episodes count as watched right now (Completed means all of them; Dropped means where you stopped)
+const watchedNow = s => s.myStatus === "Completed" && s.episodes ? s.episodes
+  : s.myStatus === "Dropped" ? Math.max(s.watched || 0, s.droppedAt || 0) : (s.watched || 0);
+function progHtml(s) {
+  if (isPlan(s)) return "";
+  const w = watchedNow(s), n = s.episodes, live = s.myStatus === "Watching" || s.myStatus === "On Hold";
+  if (!live && !(n && w)) return "";
+  const pct = n ? Math.min(100, Math.round(w / n * 100)) : 0;
+  const bar = n ? `<span class="prog-bar" role="progressbar" aria-label="Episodes watched" aria-valuemin="0" aria-valuemax="${n}" aria-valuenow="${w}"><i style="width:${pct}%"></i></span>` : "";
+  const txt = s.myStatus === "Dropped" ? "" : s.myStatus === "Completed" ? (n ? `All ${n} episodes watched` : "Completed")
+    : n ? `${w} of ${n} watched` : w ? `${w} watched` : "Not started";
+  const btns = live ? `<span class="prog-btns"><button type="button" data-act="dec" aria-label="One episode fewer for ${esc(s.name)}"${w ? "" : " disabled"}>\u2212</button><button type="button" class="prog-inc" data-act="inc" aria-label="Watched one more episode of ${esc(s.name)}">+1</button></span>` : "";
+  return `<div class="prog st-${slug(s.myStatus)}">${bar}${txt || btns ? `<span class="prog-row"><span class="prog-txt">${txt}</span>${btns}</span>` : ""}</div>`;
+}
+const aboutHtml = s => !s.synopsis ? "" : `<details class="about"><summary>About</summary><p>${esc(s.synopsis)}</p>${s.synopsisSrc
+  ? `<p class="src">Source: ${s.synopsisUrl ? `<a href="${esc(s.synopsisUrl)}" target="_blank" rel="noopener noreferrer">${esc(s.synopsisSrc)}</a>` : esc(s.synopsisSrc)}${s.synopsisSrc === "Wikipedia" ? " (CC BY-SA 4.0)" : ""}</p>` : ""}</details>`;
+function refreshProg(row, s) {
+  const nm = row.querySelector(".nm"), old = nm.querySelector(".prog"), h = progHtml(s);
+  if (old) old.remove();
+  if (h) nm.insertAdjacentHTML("beforeend", h);
+}
 function rowHtml(s) {
   return `<tr data-id="${s.id}">
-    <td class="c-name"><div class="nm-wrap">${posterHtml(s)}<div class="nm"><span class="title">${esc(s.name)}</span>${dropTag(s)}${s.notes ? `<span class="note-line" title="${esc(s.notes)}">${esc(s.notes)}</span>` : ""}</div></div></td>
+    <td class="c-name"><div class="nm-wrap">${posterHtml(s)}<div class="nm"><span class="title">${esc(s.name)}</span>${dropTag(s)}${s.notes ? `<span class="note-line" title="${esc(s.notes)}">${esc(s.notes)}</span>` : ""}${progHtml(s)}${aboutHtml(s)}</div></div></td>
     <td class="c-lang">${esc(s.language)}</td>
     <td class="c-show st-${slug(s.showStatus)}"><span class="dot">${esc(s.showStatus)}</span></td>
     <td class="c-my st-${slug(s.myStatus)}"><span class="status-wrap"><select class="status-select" data-act="status" aria-label="My status for ${esc(s.name)}">${MY.map(k => `<option${k === s.myStatus ? " selected" : ""}>${k}</option>`).join("")}</select></span></td>

@@ -1,6 +1,7 @@
 "use strict";
 
 /* ---------- Google sign-in and Drive backup ---------- */
+const ACCT_KEY = "seriesTracker.acct";   // which Google account the list on this device belongs to
 let clientId = (GOOGLE_CLIENT_ID || localStorage.getItem(CLIENT_KEY) || "").trim();
 const g = {
   token: null, expires: 0, user: readJSON(USER_KEY), fileId: null, remoteMod: null,
@@ -147,6 +148,7 @@ async function uploadBackup() {
 }
 function markSynced() {
   store(SYNCED_KEY, fingerprint(data)); g.lastSync = Date.now(); store(LAST_KEY, String(g.lastSync));
+  if (g.user && g.user.email) store(ACCT_KEY, g.user.email.toLowerCase());   // remember whose list this device holds
   g.synced = true; setStatus("ok");
 }
 
@@ -226,17 +228,53 @@ async function signIn() {
   msg("");
   if (location.protocol === "file:") { $("setup").open = true; return msg("Open this page over http or host it first. Google sign-in doesn't work from a file.", "error"); }
   if (!clientId) { $("setup").open = true; return msg("Add your Google client ID first. The steps are below.", "error"); }
-  try { await connect("select_account"); enterApp(); await syncOnConnect(); } catch (e) { reportSyncError(e); }
+  try {
+    await connect("select_account");
+    const prev = localStorage.getItem(ACCT_KEY), now = (g.user.email || "").toLowerCase();
+    if (prev && now && prev !== now && data.length) {      // the list on this device belongs to a different Google account
+      const unsaved = fingerprint(data) !== localStorage.getItem(SYNCED_KEY);
+      const ok = confirm(`This device still holds a list from another Google account (${prev}).\n\nTo keep the two accounts apart, that list will be removed from this device and replaced with the backup from ${g.user.email}.`
+        + (unsaved ? "\n\nSome of its latest changes were never backed up, so they would be lost." : "") + "\n\nContinue?");
+      if (!ok) { endSession(); showLogin(); return msg("Sign-in cancelled. The list on this device was not changed.", "ok"); }
+      wipeLocalList();
+    }
+    enterApp(); await syncOnConnect();
+  } catch (e) { reportSyncError(e); }
 }
-function signOut() {
+function endSession() {
   clearTimeout(backupTimer);
   const oldToken = g.token;
   g.token = null; g.user = null; g.fileId = null; g.remoteMod = null; g.synced = false; g.status = "idle";
   if (oldToken && window.google?.accounts?.oauth2?.revoke) { try { google.accounts.oauth2.revoke(oldToken, () => {}); } catch (e) {} }
   try { localStorage.removeItem(USER_KEY); } catch (e) {}
   try { localStorage.removeItem(GUEST_KEY); } catch (e) {}
-  refreshSyncUI(); showLogin();
+  refreshSyncUI();
+}
+// Remove this device's copy of the list and everything that ties it to an account. The backup in Drive is not touched.
+function wipeLocalList() {
+  [KEY, SYNCED_KEY, LAST_KEY, ACCT_KEY].forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
+  data = []; pristine = true; g.lastSync = 0; render();
+}
+const unsavedChanges = () => data.length > 0 && fingerprint(data) !== localStorage.getItem(SYNCED_KEY);
+function openSignOut() {
+  $("soSub").textContent = unsavedChanges()
+    ? "Some recent changes are not in Google Drive yet. If you remove the list from this device, we will try to back it up first."
+    : "Your list is safe in Google Drive. Removing it from this device too is a good idea on a shared phone or computer.";
+  $("syncDlg").close(); $("signOutDlg").showModal();
+}
+function signOutKeep() {
+  $("signOutDlg").close(); endSession(); showLogin();
   msg("Signed out. Your list is still saved on this device, and your backup stays in Google Drive.", "ok");
+}
+async function signOutAndClear() {
+  const btn = $("soClear"); btn.disabled = true;
+  try {
+    if (unsavedChanges()) await runBackup(false);
+    if (pending) return $("signOutDlg").close();            // a backup conflict needs an answer first
+    if (unsavedChanges() && !confirm("Your latest changes could not be backed up to Google Drive, so removing the list from this device would lose them. Remove it anyway?")) return;
+    $("signOutDlg").close(); endSession(); wipeLocalList(); showLogin();
+    msg("Signed out. The list was removed from this device, and your backup stays in Google Drive.", "ok");
+  } finally { btn.disabled = false; }
 }
 
 /* login page */
@@ -258,8 +296,8 @@ function startAuto() {
   setTimeout(() => {
     if (autoRan || !$("login").hidden || enriching || navigator.onLine === false) return;
     autoRan = true;
-    const todo = data.filter(x => x.poster === "");
-    if (todo.length) enrichMissing(todo, {silent: true});
+    const todo = data.filter(x => needsDetails(x) && !recentMiss(x));     // shows that came up empty recently are skipped
+    if (todo.length) enrichMissing(todo, {silent: true, skipMisses: true});
   }, 1500);
 }
 async function restoreNow() {

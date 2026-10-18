@@ -392,3 +392,27 @@ body.settings-open .wrap{visibility:hidden;}
 /* "still airing" filter chip */
 .airing-chip{--c:var(--accent);margin-left:0}
 .airing-chip[hidden]{display:none}
+
+/* episode progress */
+.prog{display:grid;gap:7px;margin-top:5px;max-width:360px}
+.prog-bar{display:block;height:6px;border-radius:99px;background:var(--surface-2);overflow:hidden}
+.prog-bar i{display:block;height:100%;border-radius:99px;background:var(--c,var(--accent));transition:width .25s}
+.prog-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.prog-txt{font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.prog-btns{display:inline-flex;gap:6px}
+.prog-btns button{min-height:32px;min-width:40px;padding:3px 11px;font-size:13px;font-weight:700;border-radius:10px}
+.prog-btns button:disabled{opacity:.4;cursor:default}
+.prog-inc{background:color-mix(in srgb,var(--accent) 18%,transparent);border-color:var(--accent)}
+.dlg-actions.stack{flex-direction:column;align-items:stretch}
+.dlg-actions.stack button{width:100%}
+
+/* synopsis */
+.about{margin-top:4px;max-width:520px}
+.about summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var(--accent);list-style:none;display:inline-block;padding:2px 0}
+.about summary::-webkit-details-marker{display:none}
+.about summary::after{content:" +"}
+.about[open] summary::after{content:" \2212"}
+.about p{font-size:13px;line-height:1.5;color:var(--muted);margin:4px 0 0}
+.about .src{font-size:12px}
+.about .src a{color:var(--accent)}
+.plot{font-size:13px;line-height:1.5;color:var(--muted);margin:8px 0 0}

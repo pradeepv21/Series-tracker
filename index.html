@@ -118,6 +118,7 @@ if(q.addEventListener)q.addEventListener("change",function(){if(!t)apply()});})(
     </section>
     <section class="settings-card"><div><h3>About &amp; credits</h3><p>Where show information comes from.</p></div>
       <p class="hint">Show details and posters are provided by <a href="https://www.tvmaze.com" target="_blank" rel="noopener noreferrer">TVmaze</a> under <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener noreferrer">CC BY-SA 4.0</a>. Posters belong to their respective owners.</p>
+      <p class="hint">Synopses and some details can also come from <a href="https://www.wikipedia.org" target="_blank" rel="noopener noreferrer">Wikipedia</a> and Wikidata, whose text is available under <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener noreferrer">CC BY-SA 4.0</a>.</p>
       <p class="hint">If you add a TMDB key, some details also come from <a href="https://www.themoviedb.org" target="_blank" rel="noopener noreferrer">TMDB</a>. This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
       <p class="hint">Series Tracker is an independent app. It is not affiliated with any streaming service, studio or network. It is provided "as is", without warranty. Keep your own export of your list if it matters to you. <a href="privacy.html">Privacy &amp; terms</a></p>
     </section>
@@ -190,6 +191,10 @@ if(q.addEventListener)q.addEventListener("change",function(){if(!t)apply()});})(
           <label class="st-plantowatch"><input type="radio" name="my" value="Plan to Watch"><span>Plan to Watch</span></label>
         </div>
       </fieldset>
+      <div class="field" id="watchField" hidden>
+        <label for="fWatched">Episodes watched</label>
+        <input id="fWatched" type="number" min="0" step="1" inputmode="numeric" placeholder="e.g. 7">
+      </div>
       <div class="field" id="dropField" hidden>
         <label for="fDroppedAt">Dropped at episode</label>
         <input id="fDroppedAt" type="number" min="1" step="1" inputmode="numeric" placeholder="Optional, e.g. 5">
@@ -267,6 +272,18 @@ if(q.addEventListener)q.addEventListener("change",function(){if(!t)apply()});})(
 </dialog>
 
 <!-- Sync conflict -->
+<dialog id="signOutDlg" aria-labelledby="soTitle">
+  <div class="dlg-body">
+    <h2 id="soTitle">Sign out?</h2>
+    <p class="lede" id="soSub"></p>
+    <div class="dlg-actions stack">
+      <button type="button" class="primary" id="soClear">Sign out and remove the list from this device</button>
+      <button type="button" id="soKeep">Sign out and keep the list here</button>
+      <button type="button" class="ghost" id="soCancel">Cancel</button>
+    </div>
+  </div>
+</dialog>
+
 <dialog id="conflictDlg" aria-labelledby="cTitle">
   <div class="dlg-body">
     <h2 id="cTitle">Your library and Drive differ</h2>
@@ -305,12 +322,12 @@ if(q.addEventListener)q.addEventListener("change",function(){if(!t)apply()});})(
     </section>
     <section class="sync-sec">
       <h3>Show details</h3>
-      <p class="hint">Language, seasons, episodes, show status, and posters are looked up online when you add a show. <span id="missingCount"></span></p>
+      <p class="hint">Language, seasons, episodes, show status, posters, and a short synopsis are looked up online when you add a show. <span id="missingCount"></span></p>
       <div class="btn-row"><button type="button" id="fillBtn">Fill in missing details</button>
         <button type="button" id="testConn">Test connection</button></div>
       <details class="setup">
         <summary>Better results for Korean and Chinese dramas</summary>
-        <p class="hint" style="margin-top:10px">Shows are looked up on TVmaze. Adding a free TMDB key searches TMDB as well, which covers many more Asian dramas.</p>
+        <p class="hint" style="margin-top:10px">Shows are looked up on TVmaze, and on Wikipedia when TVmaze has no match. Adding a free TMDB key searches TMDB as well, which covers many more Asian dramas.</p>
         <div class="field">
           <label for="tmdbKey">TMDB API key</label>
           <div class="inline"><input id="tmdbKey" type="text" spellcheck="false" autocomplete="off" placeholder="Paste your API key"><button type="button" id="saveTmdb">Save</button></div>

@@ -41,11 +41,11 @@ function loadLib(key) {
 }
 
 /* export */
-const XLSX_COLUMNS = ["Show", "Language", "Show status", "My status", "Seasons", "Episodes", "Dropped at episode", "Notes"];
+const XLSX_COLUMNS = ["Show", "Language", "Show status", "My status", "Seasons", "Episodes", "Episodes watched", "Dropped at episode", "Notes"];
 function libraryRows() {
   return appOrder(data).map(s => ({
     "Show": s.name, "Language": s.language, "Show status": s.showStatus, "My status": s.myStatus,
-    "Seasons": s.seasons ?? "", "Episodes": s.episodes ?? "",
+    "Seasons": s.seasons ?? "", "Episodes": s.episodes ?? "", "Episodes watched": watchedNow(s) || "",
     "Dropped at episode": s.droppedAt ?? "", "Notes": s.notes || ""
   }));
 }
@@ -55,8 +55,8 @@ async function exportXlsx() {
   try { await loadLib("xlsx"); }
   catch (e) { return exportCsv(rows); }
   const ws = XLSX.utils.json_to_sheet(rows, {header: XLSX_COLUMNS});
-  ws["!cols"] = [{wch: 34}, {wch: 14}, {wch: 14}, {wch: 16}, {wch: 10}, {wch: 10}, {wch: 18}, {wch: 44}];
-  ws["!autofilter"] = {ref: XLSX.utils.encode_range({s: {r: 0, c: 0}, e: {r: Math.max(rows.length, 1), c: 7}})};
+  ws["!cols"] = [{wch: 34}, {wch: 14}, {wch: 14}, {wch: 16}, {wch: 10}, {wch: 10}, {wch: 17}, {wch: 18}, {wch: 44}];
+  ws["!autofilter"] = {ref: XLSX.utils.encode_range({s: {r: 0, c: 0}, e: {r: Math.max(rows.length, 1), c: 8}})};
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Series");
   XLSX.writeFile(wb, `series-tracker-${today()}.xlsx`);
@@ -131,7 +131,7 @@ async function parseImportFile(file) {
     if (!Array.isArray(arr) || !arr.length) throw new Error("Couldn't find any shows in that file.");
     if (arr.every(x => typeof x === "string")) return listImport(arr.map(cellText).filter(Boolean));
     const keys = [...new Set(arr.filter(x => x && typeof x === "object").flatMap(Object.keys))];
-    return {sheets: [{name: "JSON", rows: [keys, ...arr.filter(x => x && typeof x === "object").map(x => keys.map(k => cellText(x[k])))]}], list: false};
+    return {sheets: [{name: "JSON", rows: [keys.map(k => k === "watched" ? "Episodes watched" : k), ...arr.filter(x => x && typeof x === "object").map(x => keys.map(k => cellText(x[k])))]}], list: false};
   }
   if (["txt", "md", "text", ""].includes(ext)) {
     const lines = (await readFile(file, "text")).split(/\r?\n/).map(cellText).filter(Boolean);
@@ -143,7 +143,7 @@ async function parseImportFile(file) {
 
 /* import: match columns, clean values, preview */
 const FIELDS = [["name", "Show name"], ["language", "Language"], ["showStatus", "Show status"],
-  ["myStatus", "My status"], ["seasons", "Seasons"], ["episodes", "Episodes"],
+  ["myStatus", "My status"], ["seasons", "Seasons"], ["episodes", "Episodes"], ["watched", "Episodes watched"],
   ["droppedAt", "Dropped at episode"], ["notes", "Notes"]];
 const ALIASES = {
   name: ["name", "show", "shows", "showname", "title", "series", "seriesname", "drama", "dramas", "dramaname", "tvshow", "titles"],
@@ -152,6 +152,7 @@ const ALIASES = {
   myStatus: ["mystatus", "mywatchingstatus", "watchstatus", "watchingstatus", "status", "progress", "watched"],
   seasons: ["seasons", "season", "noofseasons", "numberofseasons", "s"],
   episodes: ["episodes", "episode", "eps", "noofepisodes", "numberofepisodes", "totalepisodes", "ep"],
+  watched: ["episodeswatched", "watchedepisodes", "epswatched", "watchedeps", "currentepisode", "lastwatched", "lastepisodewatched", "episodeprogress"],
   droppedAt: ["droppedatepisode", "droppedat", "droppedepisode", "stoppedat", "stoppedatepisode", "episodedropped"],
   notes: ["notes", "note", "comments", "comment", "remarks"]
 };
@@ -160,7 +161,7 @@ const colLabel = i => { let s = "", n = i; do { s = String.fromCharCode(65 + n %
 const looksLikeHeader = row => (row || []).some(c => { const h = hnorm(c); return h && Object.values(ALIASES).some(a => a.includes(h)); });
 
 function autoMap(hdr, hasHeader, ncol) {
-  const map = {name: -1, language: -1, showStatus: -1, myStatus: -1, seasons: -1, episodes: -1, droppedAt: -1, notes: -1}, used = new Set();
+  const map = {name: -1, language: -1, showStatus: -1, myStatus: -1, seasons: -1, episodes: -1, watched: -1, droppedAt: -1, notes: -1}, used = new Set();
   if (hasHeader) {
     const hs = hdr.map(hnorm);
     for (const [f] of FIELDS) {
@@ -210,7 +211,7 @@ function importRecords() {
     seen.add(key);
     const rec = {name, language: get("language") ? titleCase(get("language")) : null, showStatus: parseShowStatus(get("showStatus")),
       myStatus: parseMyStatus(get("myStatus")), seasons: parseNum(get("seasons")), episodes: parseNum(get("episodes")),
-      droppedAt: parseNum(get("droppedAt")), notes: get("notes") || null};
+      droppedAt: parseNum(get("droppedAt")), watched: parseNum(get("watched")), notes: get("notes") || null};
     const d = DEMO.find(x => norm(x.name) === key);
     if (d) {
       rec.name = d.name;
@@ -274,12 +275,13 @@ function applyImport() {
       if (r.seasons) s.seasons = r.seasons;
       if (r.episodes) s.episodes = r.episodes;
       if (r.notes) s.notes = r.notes;
+      if (r.watched) s.watched = s.episodes ? Math.min(r.watched, s.episodes) : r.watched;
       if (r.droppedAt) s.droppedAt = r.droppedAt;
       if (s.myStatus !== "Dropped") s.droppedAt = null;
       s.updatedAt = now; updated++; touched.push(s);
     } else {
       const ns = cleanShow({id: newId(), name: r.name, language: r.language || "Unknown", showStatus: r.showStatus || "Unknown",
-        seasons: r.seasons, episodes: r.episodes, myStatus: r.myStatus || def, updatedAt: now, notes: r.notes || "", droppedAt: r.droppedAt});
+        seasons: r.seasons, episodes: r.episodes, myStatus: r.myStatus || def, updatedAt: now, notes: r.notes || "", droppedAt: r.droppedAt, watched: r.watched});
       data.push(ns); touched.push(ns);
       added++;
     }

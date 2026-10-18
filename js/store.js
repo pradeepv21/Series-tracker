@@ -17,17 +17,21 @@ function cleanShow(s) {
   const name = String(s.name ?? "").trim();
   if (!name) return null;
   const n = v => { const x = Math.round(Number(v)); return Number.isFinite(x) && x > 0 ? x : null; };
-  const id = Number(s.id);
+  const id = Number(s.id), ep = n(s.episodes);
+  let w = Math.round(Number(s.watched)); w = Number.isFinite(w) && w > 0 ? w : 0; if (ep && w > ep) w = ep;
   return {
     id: Number.isFinite(id) && id > 0 ? id : newId(),
     name,
     language: String(s.language || "").trim() || "Unknown",
     showStatus: SHOW.includes(s.showStatus) ? s.showStatus : "Unknown",
-    seasons: n(s.seasons), episodes: n(s.episodes),
+    seasons: n(s.seasons), episodes: ep, watched: w,
     myStatus: MY.includes(s.myStatus) ? s.myStatus : "Watching",
     updatedAt: Number(s.updatedAt) || 0,
     poster: typeof s.poster === "string" && (/^https:\/\//.test(s.poster) || s.poster === "none") ? s.poster : "",
     notes: String(s.notes ?? "").trim().slice(0, 2000),
+    synopsis: String(s.synopsis ?? "").replace(/\s+/g, " ").trim().slice(0, 1200),
+    synopsisSrc: String(s.synopsisSrc ?? "").trim().slice(0, 40),
+    synopsisUrl: typeof s.synopsisUrl === "string" && /^https:\/\//.test(s.synopsisUrl) ? s.synopsisUrl.slice(0, 300) : "",
     droppedAt: (MY.includes(s.myStatus) ? s.myStatus : "Watching") === "Dropped" ? n(s.droppedAt) : null
   };
 }
