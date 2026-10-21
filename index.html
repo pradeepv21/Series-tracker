@@ -77,7 +77,7 @@ if(q.addEventListener)q.addEventListener("change",function(){if(!t)apply()});})(
       <div class="ctl"><label for="langFilter">Language</label>
         <select id="langFilter"><option value="">All</option></select></div>
       <div class="ctl"><label for="sortBy">Sort by</label>
-        <select id="sortBy"><option value="new">Newest first</option><option value="title">Title A–Z</option><option value="status">My watching status</option><option value="airing">Still airing first</option></select></div>
+        <select id="sortBy"><option value="oldest" selected>Added first (oldest)</option><option value="new">Newest first</option><option value="title">Title A–Z</option><option value="status">My watching status</option><option value="airing">Still airing first</option></select></div>
     </div>
 
     <div class="list-meta"><div class="lm-left"><span id="count"></span><span id="enrich" aria-live="polite"></span></div><button type="button" id="clearFilters" class="ghost" hidden>Clear filters</button></div>
@@ -323,7 +323,7 @@ if(q.addEventListener)q.addEventListener("change",function(){if(!t)apply()});})(
     <section class="sync-sec">
       <h3>Show details</h3>
       <p class="hint">Language, seasons, episodes, show status, posters, and a short synopsis are looked up online when you add a show. <span id="missingCount"></span></p>
-      <div class="btn-row"><button type="button" id="fillBtn">Fill in missing details</button>
+      <div class="btn-row"><button type="button" id="fillBtn">Refresh missing details</button>
         <button type="button" id="testConn">Test connection</button></div>
       <details class="setup">
         <summary>Better results for Korean and Chinese dramas</summary>
