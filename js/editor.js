@@ -233,9 +233,11 @@ async function enrichMissing(list, opts = {}) {
     if (!s || !needsDetails(s)) continue;
     setEnrich(`${opts.silent ? "Looking up posters" : "Looking up details"}, ${checked} of ${ids.length}`);
     try {
+      const beforeShow = JSON.stringify(s);
       const r = await fillShow(s);
-      if (r.changed) filled++; else if (!r.found && r.factsMissing) notFound++;
-      save(); if (r.changed) render();
+      if (r.changed) filled++;
+      if (JSON.stringify(s) !== beforeShow) save();
+      else if (!r.found && r.factsMissing) notFound++;
     } catch (e) { offline = true; why = explainError(e); break; }
     await sleep(500);
   }

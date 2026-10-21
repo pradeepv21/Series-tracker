@@ -153,7 +153,14 @@ function markSynced() {
 }
 
 // Compare this device, Drive, and the state at the last successful sync, then pick the safe action.
-async function syncOnConnect() {
+let syncOnConnectPromise = null;
+function syncOnConnect() {
+  if (syncOnConnectPromise) return syncOnConnectPromise;
+  syncOnConnectPromise = syncOnConnectImpl().finally(() => { syncOnConnectPromise = null; });
+  return syncOnConnectPromise;
+}
+async function syncOnConnectImpl() {
+  if (pending) return; // Keep an unresolved conflict visible; do not open duplicate prompts.
   g.synced = false; setStatus("syncing");
   const remote = await findBackup();
   if (!remote) { await uploadBackup(); markSynced(); return notify("Backed up to Google Drive."); }
@@ -161,7 +168,7 @@ async function syncOnConnect() {
   const rlist = await downloadBackup(remote.id);
   const rfp = fingerprint(rlist), lfp = fingerprint(data), last = localStorage.getItem(SYNCED_KEY);
   if (rfp === lfp) { markSynced(); return notify("Your library is up to date with Google Drive."); }
-  if (pristine) { replaceData(rlist, {silent: true}); markSynced(); return notify(`Restored ${rlist.length} shows from Google Drive.`); }
+  if (pristine || (!data.length && !last)) { replaceData(rlist, {silent: true}); markSynced(); return notify(`Restored ${rlist.length} shows from Google Drive.`); }
   if (last && rfp === last) { await uploadBackup(); markSynced(); return notify("Backed up to Google Drive."); }
   if (last && lfp === last) {
     const prev = JSON.stringify(data);
@@ -198,7 +205,13 @@ async function resolveConflict(choice) {
   } catch (e) { reportSyncError(e); }
 }
 
-async function runBackup(interactive) {
+let backupPromise = null;
+function runBackup(interactive) {
+  if (backupPromise) return backupPromise;
+  backupPromise = runBackupImpl(interactive).finally(() => { backupPromise = null; });
+  return backupPromise;
+}
+async function runBackupImpl(interactive) {
   clearTimeout(backupTimer);
   try {
     await ensureToken(interactive);
@@ -290,14 +303,20 @@ function enterApp() {
   $("syncOut").appendChild($("setup"));
   startAuto();
 }
-// Once per visit, quietly fetch the official poster (and any missing details) for shows that have none.
+// Quiet background lookup is rate-limited across app launches, not just within one visit.
+// The existing “Refresh missing details” button remains available for an immediate manual check.
 let autoRan = false;
 function startAuto() {
   setTimeout(() => {
     if (autoRan || !$("login").hidden || enriching || navigator.onLine === false) return;
+    const last = Number(localStorage.getItem(AUTO_LOOKUP_KEY)) || 0;
+    if (last && Date.now() - last < AUTO_LOOKUP_INTERVAL) return;
+    const todo = data.filter(x => needsDetails(x) && !recentMiss(x));
+    if (!todo.length) return;
     autoRan = true;
-    const todo = data.filter(x => needsDetails(x) && !recentMiss(x));     // shows that came up empty recently are skipped
-    if (todo.length) enrichMissing(todo, {silent: true, skipMisses: true});
+    // Persist before starting so repeated launches/re-entry cannot queue duplicate background checks.
+    store(AUTO_LOOKUP_KEY, String(Date.now()));
+    enrichMissing(todo, {silent: true, skipMisses: true});
   }, 1500);
 }
 async function restoreNow() {

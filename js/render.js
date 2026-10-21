@@ -39,19 +39,20 @@ function notify(text, opts = {}) {
 
 /* ---------- rendering ---------- */
 const SORTS = {
+  oldest: (a, b) => a.id - b.id,
   new: (a, b) => b.id - a.id,
   title: (a, b) => a.name.localeCompare(b.name),
   status: (a, b) => MY.indexOf(a.myStatus) - MY.indexOf(b.myStatus) || a.name.localeCompare(b.name),
   airing: (a, b) => (b.showStatus === "Ongoing") - (a.showStatus === "Ongoing") || b.id - a.id
 };
 // the order shown in the app (follows the "Sort by" choice); exports and the Drive backup use it too
-const appOrder = list => [...list].sort(SORTS[$("sortBy").value] || SORTS.new);
+const appOrder = list => [...list].sort(SORTS[$("sortBy").value] || SORTS.oldest);
 const isFiltered = () => !!($("search").value.trim() || $("statusFilter").value || $("showFilter").value || $("langFilter").value);
 
 function visible() {
   const q = norm($("search").value), my = $("statusFilter").value, sh = $("showFilter").value, lg = $("langFilter").value;
   return data.filter(s => (tab === "plan") === isPlan(s) && (!q || norm(s.name).includes(q)) && (!my || s.myStatus === my) &&
-    (!sh || s.showStatus === sh) && (!lg || s.language === lg)).sort(SORTS[$("sortBy").value]);
+    (!sh || s.showStatus === sh) && (!lg || s.language === lg)).sort(SORTS[$("sortBy").value] || SORTS.oldest);
 }
 const hue = name => { let h = 0; for (const ch of norm(name)) h = (h * 31 + ch.codePointAt(0)) % 360; return h; };
 const initials = name => {

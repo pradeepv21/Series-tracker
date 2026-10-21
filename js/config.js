@@ -10,6 +10,8 @@ const GOOGLE_CLIENT_ID = "444123098530-7e8qu4po0ui0jiq5m5219g7es9ac2lsu.apps.goo
 const INSTALLED_ONLY = true;
 
 const KEY = "seriesTracker";
+const AUTO_LOOKUP_KEY = "seriesTracker.lastAutoLookup";
+const AUTO_LOOKUP_INTERVAL = 7 * 24 * 60 * 60 * 1000;
 const USER_KEY = "seriesTracker.user", CLIENT_KEY = "seriesTracker.clientId", AUTO_KEY = "seriesTracker.auto";
 const SYNCED_KEY = "seriesTracker.synced", LAST_KEY = "seriesTracker.lastSync";
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.appdata";

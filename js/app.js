@@ -155,7 +155,7 @@ $("soKeep").onclick = signOutKeep;
 $("soClear").onclick = signOutAndClear;
 $("autoBackup").onchange = e => { g.auto = e.target.checked; store(AUTO_KEY, g.auto ? "1" : "0"); if (g.auto) scheduleBackup(); };
 $("dataBtn").onclick = () => { dataMsg(""); refreshDataInfo(); $("dataDlg").showModal(); };
-$("fillBtn").onclick = () => { dataMsg(""); enrichMissing(); };
+$("fillBtn").onclick = () => { dataMsg(""); store(AUTO_LOOKUP_KEY, String(Date.now())); enrichMissing(); };
 $("testConn").onclick = async () => {
   dataMsg("Testing the connection…"); cspBlocked = false;
   try {
