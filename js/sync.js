@@ -25,6 +25,20 @@ function statusText() {
 }
 function refreshSyncUI() {
   const st = g.user ? g.status : "off", chip = $("syncChip");
+  const signInButton = $("settingsSignIn");
+  if (g.user) {
+    const account = (g.user.name || g.user.email || "").trim();
+    const initials = account.includes("@") ? account.slice(0, 2) : account.split(/\s+/).slice(0, 2).map(part => Array.from(part)[0] || "").join("");
+    signInButton.textContent = initials.toUpperCase() || "?";
+    signInButton.classList.add("is-account");
+    signInButton.setAttribute("aria-label", `Google account: ${g.user.name || g.user.email}`);
+    signInButton.title = g.user.email || g.user.name || "Google account";
+  } else {
+    signInButton.textContent = "Sign in";
+    signInButton.classList.remove("is-account");
+    signInButton.setAttribute("aria-label", "Sign in with Google");
+    signInButton.removeAttribute("title");
+  }
   chip.dataset.state = st;
   chip.classList.toggle("has-av", !!g.user);
   if (g.user) {
@@ -337,4 +351,3 @@ function openSync() {
   $("origin").textContent = location.protocol === "file:" ? "(serve this page over http first)" : location.origin;
   msg(""); refreshSyncUI(); $("syncDlg").showModal();
 }
-

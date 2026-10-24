@@ -9,6 +9,7 @@ const norm = s => String(s ?? "").toLowerCase().replace(/ı/g, "i").normalize("N
 const readJSON = k => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
 const store = (k, v) => { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } };
 const unit = (n, word) => n == null ? "" : " " + word + (n === 1 ? "" : "s");
+const ADDED_AT_MIGRATION_KEY = "seriesTracker.addedAtMigration";
 let idSeed = Date.now();
 const newId = () => ++idSeed;
 
@@ -18,9 +19,18 @@ function cleanShow(s) {
   if (!name) return null;
   const n = v => { const x = Math.round(Number(v)); return Number.isFinite(x) && x > 0 ? x : null; };
   const id = Number(s.id), ep = n(s.episodes);
+  const addedAt = Number(s.addedAt);
   let w = Math.round(Number(s.watched)); w = Number.isFinite(w) && w > 0 ? w : 0; if (ep && w > ep) w = ep;
   return {
     id: Number.isFinite(id) && id > 0 ? id : newId(),
+    addedAt: Number.isFinite(addedAt) && addedAt > 0 ? addedAt : null,
+    year: /^\d{4}$/.test(String(s.year || "")) ? String(s.year) : "",
+    cast: Array.isArray(s.cast) ? s.cast.slice(0, 12).map(x => ({
+      name: String((x && x.name) || "").trim().slice(0, 100),
+      character: String((x && x.character) || "").trim().slice(0, 100)
+    })).filter(x => x.name) : [],
+    genres: Array.isArray(s.genres) ? [...new Set(s.genres.map(x => String(x || "").trim().slice(0, 40)).filter(Boolean))].slice(0, 8) : [],
+    network: String(s.network || "").trim().slice(0, 120),
     name,
     language: String(s.language || "").trim() || "Unknown",
     showStatus: SHOW.includes(s.showStatus) ? s.showStatus : "Unknown",
@@ -37,8 +47,9 @@ function cleanShow(s) {
 }
 function sanitizeList(arr) {
   const seen = new Set(), out = [];
-  (Array.isArray(arr) ? arr : []).forEach(s => {
+  (Array.isArray(arr) ? arr : []).forEach((s, index) => {
     const c = cleanShow(s); if (!c) return;
+    if (!c.addedAt) c.addedAt = index + 1;
     while (seen.has(c.id)) c.id = newId();
     seen.add(c.id); out.push(c);
   });
@@ -63,4 +74,3 @@ function fmtWhen(ts) {
   return d.toDateString() === new Date().toDateString() ? "today at " + t
     : d.toLocaleDateString([], {day: "numeric", month: "short"}) + " at " + t;
 }
-

@@ -6,7 +6,7 @@ const getMyStatus = () => (document.querySelector('input[name="my"]:checked') ||
 const setMyStatus = v => { const r = document.querySelector(`input[name="my"][value="${v}"]`); if (r) r.checked = true; };
 const showDlg = $("showDlg");
 const missingFacts = s => s.language === "Unknown" || s.showStatus === "Unknown" || s.seasons == null || s.episodes == null;
-const needsDetails = s => missingFacts(s) || s.poster === "" || !s.synopsis;
+const needsDetails = s => missingFacts(s) || s.poster === "" || !s.synopsis || !s.year || !s.cast.length || !s.genres.length;
 
 const lk = {token: 0, timer: null, pending: null, status: "idle", meta: null, results: [], alts: [], query: "",
   manual: false, dirty: false, onlyMissing: false, warned: false, errorDetail: "", poster: "", synopsis: ""};
@@ -173,9 +173,16 @@ async function saveShow(e) {
   const fm = lk.status === "found" && lk.meta && lk.meta.synopsis && (!lk.onlyMissing || !(prior && prior.synopsis)) ? lk.meta : null;
   const syn = fm ? {synopsis: fm.synopsis, synopsisSrc: fm.synopsisSrc || "", synopsisUrl: fm.synopsisUrl || ""}
     : {synopsis: prior ? prior.synopsis : "", synopsisSrc: prior ? prior.synopsisSrc : "", synopsisUrl: prior ? prior.synopsisUrl : ""};
-  const rec = {name, ...f, myStatus: autoDone ? "Completed" : status, watched, updatedAt: Date.now(), poster, ...syn, notes: $("fNotes").value.trim().slice(0, 2000), droppedAt};
+  const meta = lk.status === "found" && lk.meta ? lk.meta : null;
+  const extra = {
+    year: meta && meta.year || prior && prior.year || "",
+    cast: meta && meta.cast && meta.cast.length ? meta.cast : prior && prior.cast || [],
+    genres: meta && meta.genres && meta.genres.length ? meta.genres : prior && prior.genres || [],
+    network: meta && meta.network || prior && prior.network || ""
+  };
+  const rec = {name, ...f, myStatus: autoDone ? "Completed" : status, watched, updatedAt: Date.now(), poster, ...syn, ...extra, notes: $("fNotes").value.trim().slice(0, 2000), droppedAt};
   if (isEdit) Object.assign(data.find(s => s.id === editingId), rec);
-  else data.push({id: newId(), ...rec});
+  else data.push({id: newId(), addedAt: Date.now(), ...rec});
   const shown = isEdit ? prior : data[data.length - 1];
   save(); $("newName").value = ""; showDlg.close();
   const home = isPlan(shown) ? "plan" : "library";              // show the person where the show now lives
@@ -212,6 +219,10 @@ async function fillShow(s) {
     if (s.episodes == null && m.episodes) { s.episodes = m.episodes; gotFacts = true; }
     if (s.poster === "" && m.poster) { s.poster = m.poster; gotPoster = true; }
     if (!s.synopsis && m.synopsis) { s.synopsis = m.synopsis; s.synopsisSrc = m.synopsisSrc || ""; s.synopsisUrl = m.synopsisUrl || ""; gotFacts = true; }
+    if (!s.year && m.year) { s.year = m.year; gotFacts = true; }
+    if (!s.cast.length && m.cast && m.cast.length) { s.cast = m.cast; gotFacts = true; }
+    if (!s.genres.length && m.genres && m.genres.length) { s.genres = m.genres; gotFacts = true; }
+    if (!s.network && m.network) { s.network = m.network; gotFacts = true; }
   }
   if (s.poster === "") {
     if (m && m.provider === "builtin") { const u = await posterFor(s.name); s.poster = u || "none"; gotPoster = !!u; }
@@ -256,4 +267,3 @@ function deleteShow(id) {
   data = data.filter(x => x.id !== id); save(); render();
   toast(`Deleted "${s.name}"`, {undo: () => restore(prev)});
 }
-

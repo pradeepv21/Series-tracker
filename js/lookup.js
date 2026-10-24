@@ -71,10 +71,17 @@ const PROVIDERS = {
         synopsis: plainText(x.summary), synopsisSrc: "TVmaze", synopsisUrl: /^https?:/.test(x.url || "") ? String(x.url).replace(/^http:/, "https:") : ""}));
     },
     async details(it) {
-      let eps = [];
+      let eps = [], show = it;
+      try { show = await getJSON(`https://api.tvmaze.com/shows/${it.id}?embed=cast`); } catch (e) { if (e.status !== 404) throw e; }
       try { eps = await getJSON(`https://api.tvmaze.com/shows/${it.id}/episodes`); } catch (e) { if (e.status !== 404) throw e; }
       const reg = (Array.isArray(eps) ? eps : []).filter(e => !e.type || e.type === "regular");
-      return {...it, seasons: new Set(reg.map(e => e.season)).size || null, episodes: reg.length || null};
+      const cast = (((show._embedded || {}).cast) || []).slice(0, 12).map(x => ({
+        name: String((x.person || {}).name || "").trim(), character: String((x.character || {}).name || "").trim()
+      })).filter(x => x.name);
+      return {...it, year: (show.premiered || it.year || "").slice(0, 4),
+        genres: Array.isArray(show.genres) ? show.genres.slice(0, 8) : [],
+        network: (show.network || show.webChannel || {}).name || "",
+        cast, seasons: new Set(reg.map(e => e.season)).size || null, episodes: reg.length || null};
     }
   },
   tmdb: {
@@ -87,9 +94,15 @@ const PROVIDERS = {
         synopsis: plainText(x.overview), synopsisSrc: "TMDB", synopsisUrl: "https://www.themoviedb.org/tv/" + x.id}));
     },
     async details(it) {
-      const d = await tmdbReq("/tv/" + it.id);
+      const d = await tmdbReq("/tv/" + it.id, {append_to_response: "credits"});
       const real = (d.seasons || []).filter(x => x.season_number > 0);
       return {...it, language: langName(d.original_language) || it.language, showStatus: tmdbStatus(d.status) || it.showStatus,
+        year: (d.first_air_date || it.year || "").slice(0, 4),
+        genres: (d.genres || []).slice(0, 8).map(x => x.name).filter(Boolean),
+        network: (d.networks || []).map(x => x.name).filter(Boolean).join(", "),
+        cast: (((d.credits || {}).cast) || []).slice(0, 12).map(x => ({
+          name: String(x.name || "").trim(), character: String(x.character || "").trim()
+        })).filter(x => x.name),
         seasons: real.length || d.number_of_seasons || null,
         episodes: real.reduce((a, x) => a + (x.episode_count || 0), 0) || d.number_of_episodes || null};
     }
@@ -176,4 +189,3 @@ async function lookupBest(q, strict, skipBuiltin) {
   if (strict && score < 0.75) return null;
   return {...(await detailsOnline(item)), score};
 }
-

@@ -131,7 +131,8 @@ async function parseImportFile(file) {
     if (!Array.isArray(arr) || !arr.length) throw new Error("Couldn't find any shows in that file.");
     if (arr.every(x => typeof x === "string")) return listImport(arr.map(cellText).filter(Boolean));
     const keys = [...new Set(arr.filter(x => x && typeof x === "object").flatMap(Object.keys))];
-    return {sheets: [{name: "JSON", rows: [keys.map(k => k === "watched" ? "Episodes watched" : k), ...arr.filter(x => x && typeof x === "object").map(x => keys.map(k => cellText(x[k])))]}], list: false};
+    return {sheets: [{name: "JSON", rows: [keys.map(k => k === "watched" ? "Episodes watched" : k), ...arr.filter(x => x && typeof x === "object").map(x => keys.map(k =>
+      k === "cast" ? JSON.stringify(x[k] || []) : k === "genres" && Array.isArray(x[k]) ? x[k].join(", ") : cellText(x[k])))]}], list: false};
   }
   if (["txt", "md", "text", ""].includes(ext)) {
     const lines = (await readFile(file, "text")).split(/\r?\n/).map(cellText).filter(Boolean);
@@ -144,7 +145,8 @@ async function parseImportFile(file) {
 /* import: match columns, clean values, preview */
 const FIELDS = [["name", "Show name"], ["language", "Language"], ["showStatus", "Show status"],
   ["myStatus", "My status"], ["seasons", "Seasons"], ["episodes", "Episodes"], ["watched", "Episodes watched"],
-  ["droppedAt", "Dropped at episode"], ["notes", "Notes"]];
+  ["droppedAt", "Dropped at episode"], ["notes", "Notes"], ["year", "Release year"], ["genres", "Genres"],
+  ["network", "Network"], ["cast", "Cast"]];
 const ALIASES = {
   name: ["name", "show", "shows", "showname", "title", "series", "seriesname", "drama", "dramas", "dramaname", "tvshow", "titles"],
   language: ["language", "lang", "languages"],
@@ -154,7 +156,11 @@ const ALIASES = {
   episodes: ["episodes", "episode", "eps", "noofepisodes", "numberofepisodes", "totalepisodes", "ep"],
   watched: ["episodeswatched", "watchedepisodes", "epswatched", "watchedeps", "currentepisode", "lastwatched", "lastepisodewatched", "episodeprogress"],
   droppedAt: ["droppedatepisode", "droppedat", "droppedepisode", "stoppedat", "stoppedatepisode", "episodedropped"],
-  notes: ["notes", "note", "comments", "comment", "remarks"]
+  notes: ["notes", "note", "comments", "comment", "remarks"],
+  year: ["releaseyear", "year", "firstairdate", "premiered"],
+  genres: ["genres", "genre", "category", "categories"],
+  network: ["network", "channel", "broadcaster"],
+  cast: ["cast", "actors", "starring"]
 };
 const hnorm = v => String(v ?? "").toLowerCase().replace(/[^a-z]/g, "");
 const colLabel = i => { let s = "", n = i; do { s = String.fromCharCode(65 + n % 26) + s; n = Math.floor(n / 26) - 1; } while (n >= 0); return s; };
@@ -209,9 +215,21 @@ function importRecords() {
     const key = norm(name);
     if (!key || seen.has(key)) { ignored++; continue; }
     seen.add(key);
+    let cast = [];
+    const castText = get("cast");
+    if (castText) {
+      try {
+        const parsed = JSON.parse(castText);
+        if (Array.isArray(parsed)) cast = parsed;
+      } catch (e) {
+        cast = castText.split(/[,;]\s*/).filter(Boolean).map(person => ({name: person, character: ""}));
+      }
+    }
     const rec = {name, language: get("language") ? titleCase(get("language")) : null, showStatus: parseShowStatus(get("showStatus")),
       myStatus: parseMyStatus(get("myStatus")), seasons: parseNum(get("seasons")), episodes: parseNum(get("episodes")),
-      droppedAt: parseNum(get("droppedAt")), watched: parseNum(get("watched")), notes: get("notes") || null};
+      droppedAt: parseNum(get("droppedAt")), watched: parseNum(get("watched")), notes: get("notes") || null,
+      year: /^\d{4}$/.test(get("year")) ? get("year") : "",
+      genres: get("genres").split(/[,;]\s*/).filter(Boolean), network: get("network"), cast};
     const d = DEMO.find(x => norm(x.name) === key);
     if (d) {
       rec.name = d.name;
@@ -275,13 +293,18 @@ function applyImport() {
       if (r.seasons) s.seasons = r.seasons;
       if (r.episodes) s.episodes = r.episodes;
       if (r.notes) s.notes = r.notes;
+      if (r.year) s.year = r.year;
+      if (r.genres.length) s.genres = r.genres;
+      if (r.network) s.network = r.network;
+      if (r.cast.length) s.cast = r.cast;
       if (r.watched) s.watched = s.episodes ? Math.min(r.watched, s.episodes) : r.watched;
       if (r.droppedAt) s.droppedAt = r.droppedAt;
       if (s.myStatus !== "Dropped") s.droppedAt = null;
       s.updatedAt = now; updated++; touched.push(s);
     } else {
-      const ns = cleanShow({id: newId(), name: r.name, language: r.language || "Unknown", showStatus: r.showStatus || "Unknown",
-        seasons: r.seasons, episodes: r.episodes, myStatus: r.myStatus || def, updatedAt: now, notes: r.notes || "", droppedAt: r.droppedAt, watched: r.watched});
+      const ns = cleanShow({id: newId(), addedAt: now, name: r.name, language: r.language || "Unknown", showStatus: r.showStatus || "Unknown",
+        seasons: r.seasons, episodes: r.episodes, myStatus: r.myStatus || def, updatedAt: now, notes: r.notes || "", droppedAt: r.droppedAt, watched: r.watched,
+        year: r.year, genres: r.genres, network: r.network, cast: r.cast});
       data.push(ns); touched.push(ns);
       added++;
     }
@@ -293,4 +316,3 @@ function applyImport() {
   toast(bits.join(", "), {undo: () => restore(prev)});
   if ($("impLookup").checked && touched.some(needsDetails)) enrichMissing(touched);
 }
-

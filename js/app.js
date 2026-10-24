@@ -6,6 +6,7 @@ const settingsOpen = () => !settingsPage.hidden;
 function openSettings() { if (!$('login').hidden) return; settingsPage.hidden=false; document.body.classList.add("settings-open"); appRoot.inert=true; refreshSyncUI(); }
 function closeSettings() { settingsPage.hidden=true; document.body.classList.remove("settings-open"); appRoot.inert=false; }
 $("settingsBtn").onclick=openSettings; $("settingsBack").onclick=closeSettings;
+$("settingsSignIn").onclick=openSync;
 document.addEventListener("keydown", e => { if(e.key === "Escape" && settingsOpen()) closeSettings(); });
 $("installApp").onclick=async()=>{ if(!window.__installPrompt)return; window.__installPrompt.prompt(); await window.__installPrompt.userChoice; window.__installPrompt=null; $("installApp").hidden=true; };
 window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();window.__installPrompt=e;$("installApp").hidden=false;$("installHint").hidden=true;});
@@ -89,7 +90,8 @@ function stepEpisode(id, d, row) {
 $("tbody").addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if (!b) return;
   const row = b.closest("tr[data-id]"), id = row ? Number(row.dataset.id) : null;
-  if (b.dataset.act === "edit") openShowDialog(data.find(s => s.id === id));
+  if (b.dataset.act === "details") showDetails(id);
+  else if (b.dataset.act === "edit") openShowDialog(data.find(s => s.id === id));
   else if (b.dataset.act === "delete") deleteShow(id);
   else if (b.dataset.act === "inc" || b.dataset.act === "dec") stepEpisode(id, b.dataset.act === "inc" ? 1 : -1, row);
   else if (b.dataset.act === "clear") clearFilters();
@@ -123,20 +125,17 @@ $("lookup").addEventListener("click", e => {
   else lookupNow();
 });
 document.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", () => b.closest("dialog").close()));
-[showDlg, $("syncDlg"), $("dataDlg"), $("importDlg")].forEach(d => d.addEventListener("click", e => { if (e.target === d) d.close(); }));
+[showDlg, $("showDetailsDlg"), $("syncDlg"), $("dataDlg"), $("importDlg")].forEach(d => d.addEventListener("click", e => { if (e.target === d) d.close(); }));
 
 $("syncChip").onclick = openSync;
 $("googleSignIn").onclick = signIn;
 $("loginGoogle").onclick = signIn;
 $("loginGuest").onclick = () => { store(GUEST_KEY, "1"); msg(""); enterApp(); };
-function syncThemeButtons() {
-  const dark = document.documentElement.dataset.mode === "dark", t = dark ? "Switch to light mode" : "Switch to dark mode";
-  document.querySelectorAll("[data-theme-toggle]").forEach(b => { b.setAttribute("aria-label", t); b.title = t; });
+function syncThemeToggle() {
+  $("themeSwitch").checked = document.documentElement.dataset.mode === "dark";
 }
-document.querySelectorAll("[data-theme-toggle]").forEach(b => b.addEventListener("click", () => {
-  window.__setTheme(document.documentElement.dataset.mode === "dark" ? "light" : "dark"); syncThemeButtons();
-}));
-new MutationObserver(syncThemeButtons).observe(document.documentElement, {attributes: true, attributeFilter: ["data-mode"]});
+$("themeSwitch").addEventListener("change", e => window.__setTheme(e.target.checked ? "dark" : "light"));
+new MutationObserver(syncThemeToggle).observe(document.documentElement, {attributes: true, attributeFilter: ["data-mode"]});
 $("tbody").addEventListener("error", e => {
   const im = e.target; if (!(im instanceof HTMLImageElement)) return;
   const row = im.closest("tr[data-id]"), s = row && data.find(x => x.id === Number(row.dataset.id));
@@ -193,11 +192,45 @@ $("conflictDlg").addEventListener("close", () => {
   if (pending) { g.status = "error"; g.error = "choose which copy to keep."; refreshSyncUI(); }
 });
 
+// Custom ordering: drag a show row above/below another row, then save its order.
+let draggedShowId = null;
+$("tbody").addEventListener("dragstart", e => {
+  const row = e.target.closest("tr[data-id]");
+  if (!row || $("sortBy").value !== "custom") { e.preventDefault(); return; }
+  draggedShowId = Number(row.dataset.id);
+  row.classList.add("dragging");
+  if (e.dataTransfer) { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", String(draggedShowId)); }
+});
+$("tbody").addEventListener("dragover", e => {
+  const row = e.target.closest("tr[data-id]");
+  if (!row || $("sortBy").value !== "custom" || !draggedShowId) return;
+  e.preventDefault();
+  $("tbody").querySelectorAll(".drag-over").forEach(x => x.classList.remove("drag-over"));
+  if (Number(row.dataset.id) !== draggedShowId) row.classList.add("drag-over");
+  if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+});
+$("tbody").addEventListener("drop", e => {
+  const target = e.target.closest("tr[data-id]");
+  if (!target || $("sortBy").value !== "custom" || !draggedShowId) return;
+  e.preventDefault();
+  const from = data.findIndex(x => x.id === draggedShowId), to = data.findIndex(x => x.id === Number(target.dataset.id));
+  if (from >= 0 && to >= 0 && from !== to) {
+    const [item] = data.splice(from, 1);
+    data.splice(to, 0, item);
+    save();
+  }
+  draggedShowId = null;
+  render();
+});
+$("tbody").addEventListener("dragend", () => {
+  draggedShowId = null;
+  $("tbody").querySelectorAll(".dragging,.drag-over").forEach(x => x.classList.remove("dragging","drag-over"));
+});
 render();
 renderNote();
 if (!store("seriesTracker.probe", "1")) $("storageWarn").hidden = false;
 refreshSyncUI();
-syncThemeButtons();
+syncThemeToggle();
 if (GATED) showGate();
 else if (!g.user && localStorage.getItem(GUEST_KEY) !== "1") showLogin(); else enterApp();
 

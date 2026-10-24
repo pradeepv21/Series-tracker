@@ -5,7 +5,16 @@ let pristine = false;
 function load() {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw !== null) { const p = JSON.parse(raw); return sanitizeList(Array.isArray(p) ? p : p.shows); }
+    if (raw !== null) {
+      const p = JSON.parse(raw), list = Array.isArray(p) ? p : p.shows, normalized = sanitizeList(list);
+      if (Array.isArray(list) && localStorage.getItem(ADDED_AT_MIGRATION_KEY) !== "1") {
+        normalized.forEach((s, index) => { s.addedAt = index + 1; });
+        if (store(KEY, JSON.stringify(normalized))) store(ADDED_AT_MIGRATION_KEY, "1");
+      } else if (Array.isArray(list) && list.some(s => !s || typeof s !== "object" || !(Number(s.addedAt) > 0))) {
+        store(KEY, JSON.stringify(normalized));
+      }
+      return normalized;
+    }
   } catch (e) {}
   pristine = true;
   return [];
@@ -38,12 +47,14 @@ function notify(text, opts = {}) {
 }
 
 /* ---------- rendering ---------- */
+const addedOrder = (a, b) => a.addedAt - b.addedAt || a.id - b.id;
 const SORTS = {
-  oldest: (a, b) => a.id - b.id,
-  new: (a, b) => b.id - a.id,
+  oldest: addedOrder,
+  new: (a, b) => addedOrder(b, a),
   title: (a, b) => a.name.localeCompare(b.name),
   status: (a, b) => MY.indexOf(a.myStatus) - MY.indexOf(b.myStatus) || a.name.localeCompare(b.name),
-  airing: (a, b) => (b.showStatus === "Ongoing") - (a.showStatus === "Ongoing") || b.id - a.id
+  airing: (a, b) => (b.showStatus === "Ongoing") - (a.showStatus === "Ongoing") || addedOrder(a, b),
+  custom: (a, b) => data.indexOf(a) - data.indexOf(b)
 };
 // the order shown in the app (follows the "Sort by" choice); exports and the Drive backup use it too
 const appOrder = list => [...list].sort(SORTS[$("sortBy").value] || SORTS.oldest);
@@ -81,8 +92,61 @@ function progHtml(s) {
   const btns = live ? `<span class="prog-btns"><button type="button" data-act="dec" aria-label="One episode fewer for ${esc(s.name)}"${w ? "" : " disabled"}>\u2212</button><button type="button" class="prog-inc" data-act="inc" aria-label="Watched one more episode of ${esc(s.name)}">+1</button></span>` : "";
   return `<div class="prog st-${slug(s.myStatus)}">${bar}${txt || btns ? `<span class="prog-row"><span class="prog-txt">${txt}</span>${btns}</span>` : ""}</div>`;
 }
-const aboutHtml = s => !s.synopsis ? "" : `<details class="about"><summary>About</summary><p>${esc(s.synopsis)}</p>${s.synopsisSrc
-  ? `<p class="src">Source: ${s.synopsisUrl ? `<a href="${esc(s.synopsisUrl)}" target="_blank" rel="noopener noreferrer">${esc(s.synopsisSrc)}</a>` : esc(s.synopsisSrc)}${s.synopsisSrc === "Wikipedia" ? " (CC BY-SA 4.0)" : ""}</p>` : ""}</details>`;
+function renderShowDetails(s, loading = false, error = "") {
+  const field = (label, value) => `<div class="detail-field"><dt>${label}</dt><dd>${esc(value)}</dd></div>`;
+  const info = [
+    field("Release year", s.year || (loading ? "Loading…" : "Unknown")),
+    field("Language", s.language),
+    field("Series status", s.showStatus),
+    field("My status", s.myStatus),
+    field("Seasons", s.seasons ?? "Unknown"),
+    field("Episodes", s.episodes ?? "Unknown")
+  ];
+  if (!isPlan(s)) info.push(field("Episodes watched", watchedNow(s)));
+  if (s.droppedAt) info.push(field("Stopped at", `Episode ${s.droppedAt}`));
+  if (s.genres.length) info.push(field("Genres", s.genres.join(", ")));
+  if (s.network) info.push(field("Network", s.network));
+  $("showDetailsTitle").textContent = "Show details";
+  $("showDetailsContent").innerHTML = `<div class="show-details-head">${posterHtml(s)}<div><h3>${esc(s.name)}</h3><dl class="show-detail-grid">${info.join("")}</dl></div></div>
+    ${s.synopsis ? `<section class="show-detail-section"><h4>About this show</h4><p>${esc(s.synopsis)}</p>${s.synopsisSrc
+      ? `<p class="src">Source: ${s.synopsisUrl ? `<a href="${esc(s.synopsisUrl)}" target="_blank" rel="noopener noreferrer">${esc(s.synopsisSrc)}</a>` : esc(s.synopsisSrc)}${s.synopsisSrc === "Wikipedia" ? " (CC BY-SA 4.0)" : ""}</p>` : ""}</section>` : ""}
+    <section class="show-detail-section"><h4>Cast</h4>${s.cast.length
+      ? `<ul class="show-cast">${s.cast.map(person => `<li><b>${esc(person.name)}</b>${person.character ? `<span>${esc(person.character)}</span>` : ""}</li>`).join("")}</ul>`
+      : `<p>${error ? esc(error) : loading ? "Loading cast details…" : "Cast details are unavailable."}</p>`}</section>
+    ${s.notes ? `<section class="show-detail-section"><h4>My notes</h4><p>${esc(s.notes)}</p></section>` : ""}`;
+}
+const detailsLoads = new Map();
+async function loadShowDetails(id) {
+  if (detailsLoads.has(id)) return detailsLoads.get(id);
+  const pending = (async () => {
+    const s = data.find(x => x.id === id); if (!s) return;
+    try {
+      const meta = await lookupBest(s.name, true, true);
+      if (!meta) throw new Error("No matching show details were found.");
+      const before = JSON.stringify([s.year, s.cast, s.genres, s.network]);
+      if (!s.year && meta.year) s.year = meta.year;
+      if (!s.cast.length && meta.cast && meta.cast.length) s.cast = meta.cast;
+      if (!s.genres.length && meta.genres && meta.genres.length) s.genres = meta.genres;
+      if (!s.network && meta.network) s.network = meta.network;
+      const changed = before !== JSON.stringify([s.year, s.cast, s.genres, s.network]);
+      if (changed) save();
+      if ($("showDetailsDlg").dataset.showId === String(id)) renderShowDetails(s, false);
+    } catch (e) {
+      if ($("showDetailsDlg").dataset.showId === String(id))
+        renderShowDetails(s, false, `Could not load cast and release details. ${explainError(e)}`);
+    }
+  })().finally(() => detailsLoads.delete(id));
+  detailsLoads.set(id, pending);
+  return pending;
+}
+function showDetails(id) {
+  const s = data.find(x => x.id === id); if (!s) return;
+  const loading = !s.year || !s.cast.length || !s.genres.length;
+  $("showDetailsDlg").dataset.showId = String(id);
+  renderShowDetails(s, loading);
+  $("showDetailsDlg").showModal();
+  if (loading) loadShowDetails(id);
+}
 function refreshProg(row, s) {
   const nm = row.querySelector(".nm"), old = nm.querySelector(".prog"), h = progHtml(s);
   if (old) old.remove();
@@ -90,7 +154,7 @@ function refreshProg(row, s) {
 }
 function rowHtml(s) {
   return `<tr data-id="${s.id}">
-    <td class="c-name"><div class="nm-wrap">${posterHtml(s)}<div class="nm"><span class="title">${esc(s.name)}</span>${dropTag(s)}${s.notes ? `<span class="note-line" title="${esc(s.notes)}">${esc(s.notes)}</span>` : ""}${progHtml(s)}${aboutHtml(s)}</div></div></td>
+    <td class="c-name"><div class="nm-wrap"><button type="button" class="drag-handle" data-act="move" aria-label="Drag to reorder ${esc(s.name)}" title="Drag to reorder" tabindex="-1">⠿</button><button type="button" class="show-poster-open" data-act="details" aria-label="Show details for ${esc(s.name)}">${posterHtml(s)}</button><div class="nm"><button type="button" class="show-title-open" data-act="details" aria-label="Show details for ${esc(s.name)}">${esc(s.name)}</button>${dropTag(s)}${s.notes ? `<span class="note-line" title="${esc(s.notes)}">${esc(s.notes)}</span>` : ""}${progHtml(s)}</div></div></td>
     <td class="c-lang">${esc(s.language)}</td>
     <td class="c-show st-${slug(s.showStatus)}"><span class="dot">${esc(s.showStatus)}</span></td>
     <td class="c-my st-${slug(s.myStatus)}"><span class="status-wrap"><select class="status-select" data-act="status" aria-label="My status for ${esc(s.name)}">${MY.map(k => `<option${k === s.myStatus ? " selected" : ""}>${k}</option>`).join("")}</select></span></td>
@@ -147,6 +211,13 @@ function render() {
   renderLangs(); renderSummary(); renderTabs();
   const rows = visible();
   $("tbody").innerHTML = rows.length ? rows.map(rowHtml).join("") : emptyRow();
+  const custom = $("sortBy").value === "custom";
+  $("tbody").querySelectorAll("tr[data-id]").forEach(row => {
+    row.draggable = custom;
+    row.classList.toggle("reorderable", custom);
+    const handle = row.querySelector(".drag-handle");
+    if (handle) { handle.tabIndex = custom ? 0 : -1; handle.hidden = !custom; }
+  });
   const f = isFiltered();
   const inTab = data.filter(x => (tab === "plan") === isPlan(x)).length;
   $("count").textContent = f && inTab ? `Showing ${rows.length} of ${inTab}` : "";
@@ -156,4 +227,3 @@ function clearFilters() {
   $("search").value = ""; $("statusFilter").value = ""; $("showFilter").value = ""; $("langFilter").value = "";
   render();
 }
-

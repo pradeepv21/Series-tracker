@@ -1,7 +1,7 @@
 /* Series Tracker service worker.
    Caches only this site's own files so the app opens offline. Google sign-in, Drive, TVmaze, TMDB,
    fonts and CDN libraries are never touched. Bump VERSION whenever you deploy a new index.html. */
-const VERSION = "v9";
+const VERSION = "v17";
 const CACHE = "series-tracker-" + VERSION;
 const SHELL = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "privacy.html",
   "css/style.css", "js/config.js", "js/store.js", "js/render.js", "js/lookup.js", "js/editor.js", "js/importexport.js", "js/sync.js", "js/app.js"];
